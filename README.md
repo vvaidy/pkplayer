@@ -2,9 +2,11 @@
 
 PechaKucha PDF player. Build an **Event** (time per slide, max slides, playlist of PDFs), hit **Play**, and each deck runs fullscreen on a fixed timer.
 
+**📖 [User manual](docs/manual/README.md)** — tutorials, reference, troubleshooting, and how to build and release.
+
 ## Install / run
 
-- Packaged Mac app: open `dist/PK Player-1.0.0-arm64.dmg` (Apple Silicon) or `dist/PK Player-1.0.0.dmg` (Intel). The app is unsigned, so the first launch needs right-click → Open.
+- Installers: `npm run dist` (Mac), `npm run dist:win`, `npm run dist:linux` → `dist/PK-Player-<version>-<os>-<arch>.<ext>`, or let GitHub Actions build all three (see [Building & releasing](docs/manual/08-building-and-releasing.md)). Builds are unsigned; see [first-launch warnings](docs/manual/06-installing.md#first-launch-warnings).
 - From source: `npm install`, then `npm start`.
 
 ## Editor
@@ -36,7 +38,9 @@ Each deck plays `min(pages, Max Slides)` slides and then stops on the next deck'
 npm test                 # unit tests (headless)
 npm run test:e2e         # Electron end-to-end tests — OPENS FULLSCREEN WINDOWS on your displays
 npm run fixtures         # regenerate samples/ test PDFs
-npm run dist             # build Mac DMG + zip into dist/
+npm run dist             # build Mac DMG + zip into dist/ (dist:win, dist:linux also work from a Mac)
+node scripts/make-demo-decks.js          # regenerate samples/demo/ tutorial decks
+node scripts/capture-docs-screens.js     # regenerate manual screenshots — OPENS FULLSCREEN WINDOWS
 ```
 
 To run the e2e suite against the packaged app, set `PK_E2E_EXECUTABLE="dist/mac-arm64/PK Player.app/Contents/MacOS/PK Player"`.
