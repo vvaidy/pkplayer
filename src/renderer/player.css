@@ -32,7 +32,8 @@ body.player.idle { cursor: none; }
 /* Big Play overlay shown before each deck. */
 .waiting {
   position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 28px; background: rgba(0, 0, 0, 0.45); animation: fade-in 0.25s ease-out;
+  gap: 28px; background: rgba(0, 0, 0, 0.5); animation: fade-in 0.25s ease-out;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); /* slide reads as a backdrop, not text */
 }
 .big-play {
   appearance: none; border: 0; cursor: pointer;
@@ -64,7 +65,7 @@ body.player.idle { cursor: none; }
   position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 16px; background: #000; color: rgba(255, 255, 255, 0.7); animation: fade-in 0.2s;
 }
-.ended { background: rgba(0, 0, 0, 0.88); }
+.ended { background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .ended-title { font: 700 clamp(28px, 6vmin, 64px)/1 var(--font); color: #fff; }
 
 .flash {

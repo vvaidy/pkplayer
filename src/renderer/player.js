@@ -127,6 +127,11 @@ function flash(text) {
   }, FLASH_MS);
 }
 
+function hideFlash() {
+  clearTimeout(flashTimer);
+  $('flash').hidden = true;
+}
+
 // ---------- input ----------
 
 function exitPlayer() {
@@ -177,7 +182,8 @@ function onKey(e) {
     e.preventDefault();
     if (e.repeat) return;
     if (controller.nextDeck()) {
-      flash('Next PDF ⏭');
+      if (controller.view().phase !== PHASE.ENDED) flash('Next PDF ⏭');
+      else hideFlash(); // "End of event" speaks for itself; drop any flash from an earlier press
       onStateChange();
     }
   }
