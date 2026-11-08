@@ -39,7 +39,11 @@
       "main.js",
       "preload.cjs",
       "src/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/@napi-rs/**",
+      "!node_modules/pdfjs-dist/{legacy,web,image_decoders,types}/**",
+      "!node_modules/pdfjs-dist/build/{pdf.mjs,pdf.worker.mjs,pdf.sandbox*.mjs,*.map}",
+      "!node_modules/pdfjs-dist/webpack.mjs"
     ],
     "mac": {
       "category": "public.app-category.productivity",
@@ -63,7 +67,8 @@
       "target": "nsis"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "category": "Office"
     }
   }
 }
