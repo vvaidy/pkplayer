@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'">
+  <title>PK Player</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="editor.css">
+  <script type="module" src="editor.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="sidebar-head">
+        <div class="brand"><span class="brand-mark">20×20</span> PK Player</div>
+        <button id="newEvent" class="btn btn-primary btn-sm" title="New Event (⌘N)">+ New</button>
+      </header>
+      <ul id="eventList" class="event-list" aria-label="Events"></ul>
+      <footer class="sidebar-foot">
+        <label class="field-label" for="displaySelect">Present on</label>
+        <select id="displaySelect" class="select"></select>
+      </footer>
+    </aside>
+
+    <main id="main" class="main">
+      <section id="emptyState" class="empty-state">
+        <div class="empty-icon">▶</div>
+        <h2>Create your first Event</h2>
+        <p>An Event is a playlist of PDF decks played PechaKucha style — 20 slides, 20 seconds each.</p>
+        <button id="emptyNew" class="btn btn-primary">+ New Event</button>
+        <p class="muted small">…or just drop PDFs anywhere in this window.</p>
+      </section>
+
+      <section id="eventView" class="event-view" hidden>
+        <header class="event-head">
+          <input id="eventName" class="event-name" type="text" spellcheck="false" aria-label="Event name" maxlength="200">
+          <div class="event-actions">
+            <button id="duplicateEvent" class="btn btn-ghost btn-sm">Duplicate</button>
+            <button id="deleteEvent" class="btn btn-ghost btn-sm btn-danger">Delete</button>
+          </div>
+        </header>
+
+        <div class="props">
+          <div class="prop">
+            <label class="field-label" for="timePerSlide">Time per slide</label>
+            <div class="input-unit"><input id="timePerSlide" class="input num" type="number" min="1" max="3600" step="1"><span>sec</span></div>
+          </div>
+          <div class="prop">
+            <label class="field-label" for="maxSlides">Max slides</label>
+            <div class="input-unit"><input id="maxSlides" class="input num" type="number" min="1" max="999" step="1"><span>per PDF</span></div>
+          </div>
+          <div class="prop summary" id="summary"></div>
+          <div class="play-group">
+            <button id="playFromStart" class="btn btn-ghost" hidden>From start</button>
+            <button id="playBtn" class="btn btn-play" title="Play (F)"><span class="tri"></span><span id="playLabel">Play</span></button>
+          </div>
+        </div>
+
+        <div class="playlist-head">
+          <h2>Playlist</h2>
+          <span class="muted small">Drag to reorder · Delete removes · Enter plays from that PDF</span>
+          <button id="addPdfs" class="btn btn-sm">Add PDFs…</button>
+        </div>
+        <ol id="playlist" class="playlist" aria-label="Playlist"></ol>
+        <div id="dropHint" class="drop-hint">
+          <div class="drop-icon">⬇</div>
+          <div>Drop PDF files here</div>
+          <div class="muted small">or use “Add PDFs…”</div>
+        </div>
+      </section>
+
+      <div id="dropOverlay" class="drop-overlay" hidden><div>Drop PDFs to add</div></div>
+      <div id="busy" class="busy" hidden><div class="spinner"></div><div id="busyText">Importing…</div></div>
+    </main>
+  </div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>

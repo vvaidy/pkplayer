@@ -1,0 +1,69 @@
+{
+  "name": "pkplaypdf",
+  "productName": "PK Player",
+  "version": "1.0.0",
+  "description": "PechaKucha PDF player: timed, fullscreen playback of PDF playlists",
+  "type": "module",
+  "main": "main.js",
+  "author": "Vijay",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/unit/*.test.js\"",
+    "test:e2e": "playwright test",
+    "fixtures": "node scripts/make-fixtures.js",
+    "dist": "electron-builder --mac",
+    "dist:dir": "electron-builder --mac dir",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "pdf-lib": "^1.17.1"
+  },
+  "allowScripts": {
+    "electron-winstaller": false
+  },
+  "build": {
+    "appId": "com.returnmetrics.pkplayer",
+    "productName": "PK Player",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "src/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
