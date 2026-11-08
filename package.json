@@ -32,6 +32,7 @@
   "build": {
     "appId": "com.returnmetrics.pkplayer",
     "productName": "PK Player",
+    "artifactName": "PK-Player-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },

@@ -1,0 +1,103 @@
+# Build PK Player for macOS, Windows and Linux.
+#
+# - Every push / pull request: unit tests + installers for all three platforms,
+#   downloadable from the run's "Artifacts" section (kept 14 days).
+# - Pushing a tag like v1.2.0: same, then a DRAFT GitHub Release is created with
+#   all installers attached. Review the draft on GitHub and click "Publish".
+#
+# Release steps (from your Mac):
+#   npm version 1.2.0          # bumps package.json, commits, tags v1.2.0
+#   git push --follow-tags
+#
+# Builds are unsigned. See docs/manual/06-installing.md for what users see.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  package:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            build: npm run dist -- --publish never
+            files: |
+              dist/*.dmg
+              dist/*.zip
+          - os: windows-latest
+            build: npm run dist:win -- --x64 --publish never
+            files: dist/*.exe
+          - os: ubuntu-latest
+            build: npm run dist:linux -- --x64 --publish never
+            files: dist/*.AppImage
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # unsigned builds; remove when you add certificates
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version $v"; exit 1
+          fi
+      - run: ${{ matrix.build }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pk-player-${{ runner.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la out
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --repo "$GITHUB_REPOSITORY" --draft --generate-notes \
+            --title "PK Player ${GITHUB_REF_NAME#v}"
