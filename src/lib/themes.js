@@ -145,3 +145,129 @@ export function themeVars(t) {
   };
   return vars;
 }
+
+// ---------- custom themes ----------
+
+export const CUSTOM_THEME_PREFIX = 'custom-';
+export const BASE_COLOR_KEYS = ['bg', 'text', 'accent', 'warn', 'danger', 'ok'];
+export const BASE_COLOR_LABELS = {
+  bg: 'Background', text: 'Text', accent: 'Accent (Play and selection)', warn: 'Warning', danger: 'Error', ok: 'OK',
+};
+export const THEME_NAME_MAX = 60;
+export const THEME_FILE_MARKER = 'pkplayer-theme';
+
+export function isCustomThemeId(id) {
+  return typeof id === 'string' && id.startsWith(CUSTOM_THEME_PREFIX) && /^[a-z0-9-]+$/.test(id);
+}
+
+/** "#1A2B3C", "1a2b3c" -> "#1a2b3c"; anything else -> null. */
+export function toHexColor(value) {
+  if (typeof value !== 'string') return null;
+  const v = value.trim().toLowerCase();
+  const hex = v.startsWith('#') ? v : `#${v}`;
+  return HEX.test(hex) ? hex : null;
+}
+
+/** dark or light, judged from the background color. */
+export function modeFor(bg) {
+  return luminance(bg) < 0.4 ? 'dark' : 'light';
+}
+
+/**
+ * Check and tidy a theme that came from outside the built-in library (a saved
+ * custom theme, the theme editor, an imported file, the window URL).
+ * Returns a clean { id?, name, mode, base } or throws an Error that says what is wrong.
+ * Only the six base colors are kept, so a custom theme can never pin derived values.
+ */
+export function normalizeTheme(raw) {
+  if (!raw || typeof raw !== 'object') throw new Error('That is not a theme.');
+  const base = {};
+  for (const key of BASE_COLOR_KEYS) {
+    const color = toHexColor(raw.base?.[key]);
+    if (!color) throw new Error(`${BASE_COLOR_LABELS[key]} color must look like #1a2b3c.`);
+    base[key] = color;
+  }
+  const name = (typeof raw.name === 'string' ? raw.name.replace(/\s+/g, ' ').trim() : '').slice(0, THEME_NAME_MAX) || 'My theme';
+  const mode = raw.mode === 'dark' || raw.mode === 'light' ? raw.mode : modeFor(base.bg);
+  const theme = { name, mode, base };
+  if (isCustomThemeId(raw.id)) theme.id = raw.id;
+  return theme;
+}
+
+/** The text of a theme file that "Import theme" reads back. */
+export function exportTheme(theme) {
+  const t = normalizeTheme(theme);
+  return `${JSON.stringify({ format: THEME_FILE_MARKER, version: 1, name: t.name, mode: t.mode, base: t.base }, null, 2)}\n`;
+}
+
+const nameFromFile = (fileName) => String(fileName || '').split(/[\\/]/).pop().replace(/\.[a-z0-9]+$/i, '').trim();
+
+/** Colors of a terminal color-scheme: background, foreground and the 16-color palette (index -> hex). */
+function terminalToTheme({ background, foreground, palette }, fileName) {
+  const bg = toHexColor(background);
+  const text = toHexColor(foreground);
+  if (!bg || !text) throw new Error('This file has no background and text colors.');
+  const fallback = themeById(DEFAULT_THEME_ID).base;
+  const pick = (index, key) => toHexColor(palette[index]) || fallback[key];
+  // Terminal palettes number their colors: 1 red, 2 green, 3 yellow, 4 blue.
+  return normalizeTheme({
+    name: nameFromFile(fileName) || 'Imported theme',
+    base: { bg, text, accent: pick(4, 'accent'), warn: pick(3, 'warn'), danger: pick(1, 'danger'), ok: pick(2, 'ok') },
+  });
+}
+
+/** Ghostty theme file: lines such as "background = #1e1e2e" and "palette = 4=#89b4fa". */
+function parseGhostty(text, fileName) {
+  const out = { palette: {} };
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*([a-z-]+)\s*=\s*(.+?)\s*$/i.exec(line);
+    if (!m) continue;
+    const [, key, value] = m;
+    if (key === 'background' || key === 'foreground') out[key] = value;
+    else if (key === 'palette') {
+      const p = /^(\d{1,2})\s*=\s*(\S+)$/.exec(value);
+      if (p) out.palette[Number(p[1])] = p[2];
+    }
+  }
+  return terminalToTheme(out, fileName);
+}
+
+/** iTerm2 .itermcolors file: an XML property list of colors given as 0-1 red, green and blue components. */
+function parseIterm(text, fileName) {
+  const color = (key) => {
+    const dict = new RegExp(`<key>${key}</key>\\s*<dict>([\\s\\S]*?)</dict>`).exec(text);
+    if (!dict) return null;
+    const part = (name) => {
+      const m = new RegExp(`<key>${name} Component</key>\\s*<real>([^<]+)</real>`).exec(dict[1]);
+      const n = m ? Number(m[1]) : NaN;
+      return Number.isFinite(n) ? Math.round(Math.min(1, Math.max(0, n)) * 255).toString(16).padStart(2, '0') : null;
+    };
+    const [r, g, b] = [part('Red'), part('Green'), part('Blue')];
+    return r && g && b ? `#${r}${g}${b}` : null;
+  };
+  const palette = {};
+  for (let i = 0; i < 16; i += 1) palette[i] = color(`Ansi ${i} Color`);
+  return terminalToTheme({ background: color('Background Color'), foreground: color('Foreground Color'), palette }, fileName);
+}
+
+/**
+ * Read a theme from the text of a file: one exported by PK Player, a Ghostty
+ * theme file, or an iTerm2 .itermcolors file. The result has no id (it is new).
+ * Throws an Error that says what is wrong when the file is none of these.
+ */
+export function parseThemeFile(text, fileName = '') {
+  if (typeof text !== 'string' || !text.trim()) throw new Error('The file is empty.');
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{')) {
+    let data;
+    try {
+      data = JSON.parse(trimmed);
+    } catch (err) {
+      throw new Error(`The file is not valid JSON (${err.message}).`);
+    }
+    if (data?.format !== THEME_FILE_MARKER) throw new Error('This JSON file is not a PK Player theme.');
+    return normalizeTheme({ name: data.name || nameFromFile(fileName), mode: data.mode, base: data.base });
+  }
+  if (/<plist[\s>]/.test(trimmed)) return parseIterm(trimmed, fileName);
+  return parseGhostty(trimmed, fileName);
+}

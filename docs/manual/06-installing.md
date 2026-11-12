@@ -61,6 +61,6 @@ Events and the copied PDFs are stored in:
 | Windows | `%APPDATA%\PK Player\data` |
 | Linux | `~/.config/PK Player/data` |
 
-Inside: `events.json` (events and settings) and `library/` (PDF copies). To back up or move to another computer, quit PK Player and copy the whole `data` folder. File → **Reveal Library Folder** opens `library/`.
+Inside: `events.json` (events, settings and your own themes) and `library/` (PDF copies). To back up or move to another computer, quit PK Player and copy the whole `data` folder. File → **Reveal Library Folder** opens `library/`.
 
 Updating PK Player doesn't touch this folder. Uninstalling doesn't delete it either; remove it by hand if you want a clean slate.

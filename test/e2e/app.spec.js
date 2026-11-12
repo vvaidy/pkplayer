@@ -57,6 +57,19 @@ async function setupEvent(app, editor, { time = '1', max = '4', files }) {
   await expect(editor.locator('.row')).toHaveCount(files.filter((f) => !f.includes('not-a-pdf')).length);
 }
 
+/** Make the native "Export theme" dialog save to the given path. */
+async function stubSaveDialog(app, filePath) {
+  await app.evaluate(({ dialog }, p) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+  }, filePath);
+}
+
+const cssVar = (page, name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+const GHOSTTY_THEME = [
+  'palette = 1=#ee5566', 'palette = 2=#55cc88', 'palette = 3=#ddbb55', 'palette = 4=#5599ee',
+  'background = #0c1014', 'foreground = #d8e0e6', '',
+].join('\n');
+
 const rowNames = (editor) => editor.locator('.row .file').allTextContents();
 
 async function openPlayer(app, editor, trigger = () => editor.click('#playBtn')) {
@@ -276,7 +289,6 @@ test('editor: presenter and talk title default from the PDF, can be edited and c
 
 test('editor: Theme menu recolors the window, lists the library, and persists', async () => {
   const { app, editor } = await launch();
-  const cssVar = (page, name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
   const windowBg = (a) => a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor().toLowerCase());
 
   // A fresh install starts on the default theme, with no orange anywhere.
@@ -319,6 +331,164 @@ test('editor: Theme menu recolors the window, lists the library, and persists', 
   await expect(editor2.locator('html')).toHaveAttribute('data-theme', 'paper');
   expect(await windowBg(app2)).toBe('#f6f4ee');
   await app2.close();
+});
+
+test('editor: customize a theme with live preview, cancel, save, edit and delete', async () => {
+  const { app, editor } = await launch();
+  const dialog = editor.locator('#themeDialog');
+  const windowBg = (a) => a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor().toLowerCase());
+
+  // Customizing a built-in theme starts a copy; the built-in one is never changed.
+  await editor.click('#themeCustomize');
+  await expect(dialog).toBeVisible();
+  await expect(editor.locator('#themeDialogTitle')).toHaveText('New theme from Midnight Teal');
+  await expect(editor.locator('#themeName')).toHaveValue('Midnight Teal copy');
+  await expect(editor.locator('#themeHex-accent')).toHaveValue('#2dd4bf');
+  await expect(editor.locator('#themeDelete')).toBeHidden();
+  await expect(editor.locator('#themeExport')).toBeHidden();
+
+  // Typing a color repaints the window at once, and the picker follows the hex field.
+  await editor.fill('#themeHex-accent', '#ff00aa');
+  expect(await cssVar(editor, '--accent')).toBe('#ff00aa');
+  await expect(editor.locator('#themeColor-accent')).toHaveValue('#ff00aa');
+  // A half-typed color is marked and ignored, not applied.
+  await editor.fill('#themeHex-bg', '#12');
+  await expect(editor.locator('#themeHex-bg')).toHaveClass(/invalid/);
+  expect(await cssVar(editor, '--bg')).toBe('#0e1519');
+  await expect(editor.locator('#themeNote')).toContainText('not valid');
+  await editor.click('#themeSave'); // refused: the dialog stays open and nothing is saved
+  await expect(dialog).toBeVisible();
+  await expect(editor.locator('#themeNote')).toContainText('not valid');
+  await expect(editor.locator('#themeSelect optgroup')).toHaveCount(2);
+  await editor.screenshot({ path: path.join(SHOTS, 'theme-editor.png') });
+
+  // The Play shortcut is off while the dialog is open.
+  await editor.locator('#themeCancel').focus();
+  await editor.keyboard.press('f');
+  expect(app.windows().length).toBe(1);
+
+  // Cancel (and Esc) throw the changes away.
+  await editor.click('#themeCancel');
+  await expect(dialog).toBeHidden();
+  expect(await cssVar(editor, '--accent')).toBe('#2dd4bf');
+  await expect(editor.locator('#themeSelect optgroup')).toHaveCount(2);
+  await editor.click('#themeCustomize');
+  await editor.fill('#themeHex-accent', '#00ff00');
+  await editor.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  expect(await cssVar(editor, '--accent')).toBe('#2dd4bf');
+
+  // Save makes a new theme under "Your themes" and selects it.
+  await editor.click('#themeCustomize');
+  await editor.fill('#themeName', 'Harbor Lights');
+  await editor.fill('#themeHex-accent', '#ff00aa');
+  await editor.fill('#themeHex-bg', '#101020');
+  await editor.click('#themeSave');
+  await expect(dialog).toBeHidden();
+  await expect(editor.locator('#themeSelect optgroup')).toHaveCount(3);
+  await expect(editor.locator('#themeSelect optgroup[label="Your themes"] option')).toHaveText(['Harbor Lights']);
+  await expect(editor.locator('#themeSelect option:checked')).toHaveText('Harbor Lights');
+  expect(await cssVar(editor, '--accent')).toBe('#ff00aa');
+  expect(await windowBg(app)).toBe('#101020');
+
+  // A light background turns the whole theme light.
+  await editor.click('#themeCustomize');
+  await expect(editor.locator('#themeDialogTitle')).toHaveText('Customize theme');
+  await expect(editor.locator('#themeDelete')).toBeVisible();
+  await editor.fill('#themeHex-bg', '#f4f4f0');
+  await editor.fill('#themeHex-text', '#202020');
+  expect(await editor.evaluate(() => document.documentElement.style.colorScheme)).toBe('light');
+  // A poor pick is shown adjusted, and says so.
+  await editor.fill('#themeHex-accent', '#f0f0e8');
+  await expect(editor.locator('#themeNote')).toContainText('Accent');
+  expect(await cssVar(editor, '--accent')).not.toBe('#f0f0e8');
+  await editor.fill('#themeHex-accent', '#b0005a');
+  // The yellow, red and green picked for a dark background are still being adjusted for the light one.
+  await expect(editor.locator('#themeNote')).not.toContainText('Accent');
+  await expect(editor.locator('#themeNote')).toContainText('Warning');
+  await editor.click('#themeSave');
+  await expect(editor.locator('#themeSelect option')).toHaveCount(12); // edited in place, not duplicated
+
+  // It survives a restart, and the window opens already in its colors.
+  await app.close();
+  const { app: app2, editor: editor2 } = await launch();
+  await expect(editor2.locator('#themeSelect option:checked')).toHaveText('Harbor Lights');
+  expect(await cssVar(editor2, '--accent')).toBe('#b0005a');
+  expect(await windowBg(app2)).toBe('#f4f4f0');
+  expect(new URL(editor2.url()).searchParams.get('themeDef')).toContain('Harbor Lights');
+
+  // Built-in themes are still there and unchanged; switching away and back works.
+  await editor2.selectOption('#themeSelect', 'midnight-teal');
+  expect(await cssVar(editor2, '--accent')).toBe('#2dd4bf');
+  await editor2.selectOption('#themeSelect', { label: 'Harbor Lights' });
+  expect(await cssVar(editor2, '--accent')).toBe('#b0005a');
+
+  // Delete asks first, then falls back to the default theme.
+  await editor2.click('#themeCustomize');
+  editor2.once('dialog', (d) => d.dismiss());
+  await editor2.click('#themeDelete');
+  await expect(editor2.locator('#themeDialog')).toBeVisible();
+  editor2.once('dialog', (d) => d.accept());
+  await editor2.click('#themeDelete');
+  await expect(editor2.locator('#themeDialog')).toBeHidden();
+  await expect(editor2.locator('#themeSelect')).toHaveValue('midnight-teal');
+  await expect(editor2.locator('#themeSelect optgroup')).toHaveCount(2);
+  expect(await cssVar(editor2, '--accent')).toBe('#2dd4bf');
+  await app2.close();
+});
+
+test('editor: import a terminal theme file, export it, and import it back; bad files are refused', async () => {
+  const { app, editor } = await launch();
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pk-themes-'));
+  try {
+    const ghostty = path.join(work, 'My Terminal Look');
+    fs.writeFileSync(ghostty, GHOSTTY_THEME, 'utf-8');
+    await stubOpenDialog(app, [ghostty]);
+    await editor.click('#themeImport');
+    await expect(editor.locator('.toast.ok').last()).toContainText('Imported “My Terminal Look”');
+    await expect(editor.locator('#themeSelect option:checked')).toHaveText('My Terminal Look');
+    expect(await cssVar(editor, '--bg')).toBe('#0c1014');
+    expect(await cssVar(editor, '--accent')).toBe('#5599ee');
+
+    // Export writes a PK Player theme file.
+    const out = path.join(work, 'exported.pkplayer-theme.json');
+    await stubSaveDialog(app, out);
+    await editor.click('#themeCustomize');
+    await editor.click('#themeExport');
+    await expect(editor.locator('.toast.ok').last()).toContainText('exported.pkplayer-theme.json');
+    await editor.click('#themeCancel');
+    const exported = JSON.parse(fs.readFileSync(out, 'utf-8'));
+    expect(exported.format).toBe('pkplayer-theme');
+    expect(exported.base.accent).toBe('#5599ee');
+
+    // Importing that file again adds a second theme with a distinct name.
+    await stubOpenDialog(app, [out]);
+    await editor.click('#themeImport');
+    await expect(editor.locator('#themeSelect optgroup[label="Your themes"] option')).toHaveText(['My Terminal Look', 'My Terminal Look 2']);
+
+    // Files that are not themes are refused with a message, and change nothing.
+    const notes = path.join(work, 'notes.txt');
+    fs.writeFileSync(notes, 'shopping list\nmilk\n', 'utf-8');
+    await stubOpenDialog(app, [notes]);
+    await editor.click('#themeImport');
+    await expect(editor.locator('.toast.error').last()).toContainText('no background and text colors');
+    const huge = path.join(work, 'huge.json');
+    fs.writeFileSync(huge, 'x'.repeat(600 * 1024), 'utf-8');
+    await stubOpenDialog(app, [huge]);
+    await editor.click('#themeImport');
+    await expect(editor.locator('.toast.error').last()).toContainText('too large');
+    await expect(editor.locator('#themeSelect optgroup[label="Your themes"] option')).toHaveCount(2);
+
+    // Cancelling the file dialog is not an error.
+    await app.evaluate(({ dialog }) => { dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] }); });
+    const errorsBefore = await editor.locator('.toast.error').count();
+    await editor.click('#themeImport');
+    await editor.waitForTimeout(300);
+    expect(await editor.locator('.toast.error').count()).toBeLessThanOrEqual(errorsBefore);
+  } finally {
+    await app.close();
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 });
 
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
@@ -475,12 +645,24 @@ test('player: waiting screen shows presenter and talk title when set, file name 
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('delta-4x3-4-slides.pdf'), fx('alpha-5-slides.pdf')] });
   await expect(editor.locator('.row').first().locator('.who-input.presenter')).toHaveValue('Dana Lee');
+  // A built-in theme first...
   await editor.selectOption('#themeSelect', 'blueprint');
-  const player = await openPlayer(app, editor);
+  let themed = await openPlayer(app, editor);
+  await expect(themed.locator('html')).toHaveAttribute('data-theme', 'blueprint');
+  expect(await cssVar(themed, '--accent')).toBe('#5aa9ff');
+  let themedClosed = themed.waitForEvent('close');
+  await themed.keyboard.press('Escape');
+  await themedClosed;
 
-  // The player picks up the chosen theme for its own controls.
-  await expect(player.locator('html')).toHaveAttribute('data-theme', 'blueprint');
-  expect(await player.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())).toBe('#5aa9ff');
+  // ...then one of the user's own, which travels to the player in its URL.
+  const themeFile = path.join(dataDir, 'Stage Blue');
+  fs.writeFileSync(themeFile, GHOSTTY_THEME, 'utf-8');
+  await stubOpenDialog(app, [themeFile]);
+  await editor.click('#themeImport');
+  await expect(editor.locator('#themeSelect option:checked')).toHaveText('Stage Blue');
+  const player = await openPlayer(app, editor);
+  await expect(player.locator('html')).toHaveAttribute('data-theme', /^custom-/);
+  expect(await cssVar(player, '--accent')).toBe('#5599ee');
 
   await expect(player.locator('#deckPresenter')).toHaveText('Dana Lee');
   await expect(player.locator('#deckTitle')).toHaveText('Delta Talk');

@@ -7,13 +7,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { debug } from '../lib/debug.js';
 import { DEFAULT_MAX_SLIDES, DEFAULT_TIME_PER_SLIDE } from '../lib/player-controller.js';
-import { DEFAULT_THEME_ID, isThemeId } from '../lib/themes.js';
+import { CUSTOM_THEME_PREFIX, DEFAULT_THEME_ID, THEMES, isThemeId, normalizeTheme, themeById } from '../lib/themes.js';
 
 export const SCHEMA_VERSION = 1;
 export const LIMITS = Object.freeze({
   timePerSlide: { min: 0.5, max: 3600 },
   maxSlides: { min: 1, max: 999 },
   nameLength: 200,
+  customThemes: 100,
 });
 
 export class StoreError extends Error {}
@@ -21,7 +22,7 @@ export class StoreError extends Error {}
 const newId = () => crypto.randomUUID();
 
 function emptyData() {
-  return { version: SCHEMA_VERSION, settings: { displayId: null, theme: DEFAULT_THEME_ID }, events: [] };
+  return { version: SCHEMA_VERSION, settings: { displayId: null, theme: DEFAULT_THEME_ID }, themes: [], events: [] };
 }
 
 function clampNumber(value, { min, max }, label, { integer = false } = {}) {
@@ -75,8 +76,19 @@ export class Store {
       const raw = JSON.parse(fs.readFileSync(this.file, { encoding: 'utf-8' }));
       const data = emptyData();
       data.settings = { ...data.settings, ...(raw.settings || {}) };
+      // Custom themes: keep the valid ones, quietly drop anything damaged.
+      for (const item of Array.isArray(raw.themes) ? raw.themes : []) {
+        try {
+          const t = normalizeTheme(item);
+          if (t.id && !data.themes.some((x) => x.id === t.id)) data.themes.push(t);
+        } catch (err) {
+          debug('store', 'dropped an unreadable custom theme', err);
+        }
+      }
       // Files from before themes existed have no theme; an unknown id (a theme removed later) also falls back.
-      if (!isThemeId(data.settings.theme)) data.settings.theme = DEFAULT_THEME_ID;
+      if (!isThemeId(data.settings.theme) && !data.themes.some((t) => t.id === data.settings.theme)) {
+        data.settings.theme = DEFAULT_THEME_ID;
+      }
       data.events = (Array.isArray(raw.events) ? raw.events : []).map((e) => ({
         id: String(e.id || newId()),
         name: cleanName(e.name, 'Untitled Event'),
@@ -321,6 +333,60 @@ export class Store {
     return removed;
   }
 
+  // ---------- themes ----------
+
+  #hasTheme(id) {
+    return isThemeId(id) || this.data.themes.some((t) => t.id === id);
+  }
+
+  /** The user's own themes (built-in themes live in src/lib/themes.js). */
+  listThemes() {
+    return this.#clone(this.data.themes);
+  }
+
+  /** The theme in use: a custom theme's definition, or the built-in one. Never fails. */
+  currentTheme() {
+    const id = this.data.settings.theme;
+    return this.#clone(this.data.themes.find((t) => t.id === id) || themeById(id));
+  }
+
+  /**
+   * Create a custom theme, or update one when `raw.id` names an existing custom theme.
+   * Names are kept unique so the Theme menu never shows two entries that look the same.
+   */
+  saveTheme(raw) {
+    let theme;
+    try {
+      theme = normalizeTheme(raw);
+    } catch (err) {
+      throw new StoreError(err.message);
+    }
+    const existing = theme.id ? this.data.themes.find((t) => t.id === theme.id) : null;
+    if (!existing && this.data.themes.length >= LIMITS.customThemes) {
+      throw new StoreError(`You can keep up to ${LIMITS.customThemes} themes of your own. Delete one first.`);
+    }
+    const taken = new Set([...THEMES, ...this.data.themes].filter((t) => t !== existing).map((t) => t.name.toLowerCase()));
+    const wanted = theme.name;
+    for (let n = 2; taken.has(theme.name.toLowerCase()); n += 1) theme.name = `${wanted} ${n}`;
+    if (existing) Object.assign(existing, theme);
+    else {
+      theme.id = `${CUSTOM_THEME_PREFIX}${newId()}`;
+      this.data.themes.push(theme);
+    }
+    this.#save();
+    return this.#clone(existing || theme);
+  }
+
+  /** Delete a custom theme. If it was in use, the default theme takes over. Returns the settings. */
+  deleteTheme(id) {
+    const idx = this.data.themes.findIndex((t) => t.id === id);
+    if (idx < 0) throw new StoreError(`Theme not found: ${id}`);
+    this.data.themes.splice(idx, 1);
+    if (this.data.settings.theme === id) this.data.settings.theme = DEFAULT_THEME_ID;
+    this.#save();
+    return this.getSettings();
+  }
+
   // ---------- settings ----------
 
   getSettings() {
@@ -333,7 +399,7 @@ export class Store {
       this.data.settings.displayId = v === null || v === '' ? null : Number(v);
     }
     if ('theme' in patch) {
-      if (!isThemeId(patch.theme)) throw new StoreError(`Unknown theme: ${patch.theme}`);
+      if (!this.#hasTheme(patch.theme)) throw new StoreError(`Unknown theme: ${patch.theme}`);
       this.data.settings.theme = patch.theme;
     }
     this.#save();

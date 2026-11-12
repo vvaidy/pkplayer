@@ -222,6 +222,91 @@ test('settings saved before themes existed, or naming a removed theme, load with
   assert.equal(new Store(dir).getSettings().theme, 'vibe-with-claude');
 });
 
+const THEME_BASE = { bg: '#101418', text: '#eef2f5', accent: '#44ccaa', warn: '#f2c14e', danger: '#ff6b7a', ok: '#5fd39a' };
+
+test('custom themes: save creates, updates in place, and persists', () => {
+  const s = new Store(dir);
+  assert.deepEqual(s.listThemes(), []);
+  const made = s.saveTheme({ name: 'Harbor', base: THEME_BASE });
+  assert.match(made.id, /^custom-[0-9a-f-]+$/);
+  assert.deepEqual({ name: made.name, mode: made.mode, base: made.base }, { name: 'Harbor', mode: 'dark', base: THEME_BASE });
+  const edited = s.saveTheme({ id: made.id, name: 'Harbor', base: { ...THEME_BASE, accent: '#ff00aa' } });
+  assert.equal(edited.id, made.id);
+  assert.equal(s.listThemes().length, 1);
+  assert.equal(new Store(dir).listThemes()[0].base.accent, '#ff00aa');
+});
+
+test('custom themes: names stay unique, including against built-in themes', () => {
+  const s = new Store(dir);
+  assert.equal(s.saveTheme({ name: 'Paper', base: THEME_BASE }).name, 'Paper 2');
+  assert.equal(s.saveTheme({ name: 'paper', base: THEME_BASE }).name, 'paper 3');
+  const a = s.saveTheme({ name: 'Mine', base: THEME_BASE });
+  assert.equal(s.saveTheme({ name: 'Mine', base: THEME_BASE }).name, 'Mine 2');
+  assert.equal(s.saveTheme({ id: a.id, name: 'Mine', base: THEME_BASE }).name, 'Mine'); // re-saving keeps its own name
+});
+
+test('custom themes: a saved theme can never take a built-in id', () => {
+  const s = new Store(dir);
+  const t = s.saveTheme({ id: 'midnight-teal', name: 'Sneaky', base: THEME_BASE });
+  assert.match(t.id, /^custom-/);
+  assert.equal(s.saveTheme({ id: 'custom-does-not-exist', name: 'Orphan', base: THEME_BASE }).id.startsWith('custom-'), true);
+  assert.equal(s.listThemes().length, 2);
+});
+
+test('custom themes: can be selected, and the theme in use is returned in full', () => {
+  const s = new Store(dir);
+  assert.equal(s.currentTheme().id, 'midnight-teal');
+  const t = s.saveTheme({ name: 'Harbor', base: THEME_BASE });
+  assert.equal(s.updateSettings({ theme: t.id }).theme, t.id);
+  assert.deepEqual(new Store(dir).currentTheme(), t);
+  assert.throws(() => s.updateSettings({ theme: 'custom-nope' }), StoreError);
+});
+
+test('custom themes: deleting the theme in use falls back to the default', () => {
+  const s = new Store(dir);
+  const a = s.saveTheme({ name: 'A', base: THEME_BASE });
+  const b = s.saveTheme({ name: 'B', base: THEME_BASE });
+  s.updateSettings({ theme: a.id });
+  assert.equal(s.deleteTheme(b.id).theme, a.id); // deleting another theme changes nothing
+  assert.equal(s.deleteTheme(a.id).theme, 'midnight-teal');
+  assert.deepEqual(new Store(dir).listThemes(), []);
+  assert.throws(() => s.deleteTheme(a.id), StoreError);
+  assert.throws(() => s.deleteTheme('paper'), StoreError); // built-in themes cannot be deleted
+});
+
+test('custom themes: bad input is refused with a readable message, and nothing is saved', () => {
+  const s = new Store(dir);
+  assert.throws(() => s.saveTheme({ name: 'Bad', base: { ...THEME_BASE, text: 'white' } }), /Text color must look like/);
+  assert.throws(() => s.saveTheme(null), StoreError);
+  assert.deepEqual(s.listThemes(), []);
+});
+
+test('custom themes: there is a limit on how many are kept', () => {
+  const s = new Store(dir);
+  for (let i = 0; i < 100; i += 1) s.saveTheme({ name: `T${i}`, base: THEME_BASE });
+  assert.throws(() => s.saveTheme({ name: 'One too many', base: THEME_BASE }), /up to 100/);
+  const first = s.listThemes()[0];
+  assert.equal(s.saveTheme({ ...first, name: 'Renamed' }).name, 'Renamed'); // editing is still allowed at the limit
+});
+
+test('custom themes: damaged entries in the file are dropped, good ones kept, and a lost theme falls back', () => {
+  fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify({
+    version: 1,
+    settings: { displayId: null, theme: 'custom-gone' },
+    themes: [
+      { id: 'custom-good', name: 'Good', mode: 'dark', base: THEME_BASE },
+      { id: 'custom-bad', name: 'Bad', base: { bg: 'x' } },
+      { id: 'paper', name: 'Fake built-in', base: THEME_BASE },
+      { id: 'custom-good', name: 'Duplicate id', base: THEME_BASE },
+      'nonsense',
+    ],
+    events: [],
+  }), { encoding: 'utf-8' });
+  const s = new Store(dir);
+  assert.deepEqual(s.listThemes().map((t) => t.name), ['Good']);
+  assert.equal(s.getSettings().theme, 'midnight-teal');
+});
+
 test('corrupt events.json is backed up, not lost', () => {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'events.json'), '{not json', { encoding: 'utf-8' });

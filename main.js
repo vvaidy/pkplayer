@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './src/main/store.js';
 import { buildHelpMenu } from './src/main/help-menu.js';
-import { themeById, themeVars } from './src/lib/themes.js';
+import { exportTheme, isCustomThemeId, parseThemeFile, themeVars } from './src/lib/themes.js';
 import { debug } from './src/lib/debug.js';
 
 // ---------- app parameters ----------
@@ -15,6 +15,7 @@ const DATA_DIR = process.env.PKPLAY_DATA_DIR || path.join(app.getPath('userData'
 const EDITOR_URL = 'app://bundle/src/renderer/editor.html';
 const PLAYER_URL = 'app://bundle/src/renderer/player.html';
 const DEBUG_QUERY = process.env.PKPLAY_DEBUG === '1' ? '&debug=1' : '';
+const THEME_FILE_MAX_BYTES = 512 * 1024; // theme files are a few KB; refuse anything that is clearly not one
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -101,7 +102,19 @@ const secureWebPrefs = {
 
 /** The chosen theme's window background, so a window never flashes another color while it loads. */
 function themeBackground() {
-  return themeVars(themeById(store.getSettings().theme))['--bg'];
+  return themeVars(store.currentTheme())['--bg'];
+}
+
+/**
+ * URL parameters that tell a window which theme to paint itself in. A built-in
+ * theme travels as its id; a custom theme also carries its definition, so the
+ * window has its colors before it has asked the main process for anything.
+ */
+function themeParams() {
+  const theme = store.currentTheme();
+  const params = { theme: theme.id };
+  if (isCustomThemeId(theme.id)) params.themeDef = JSON.stringify(theme);
+  return params;
 }
 
 function createEditorWindow() {
@@ -115,7 +128,7 @@ function createEditorWindow() {
     show: false,
     webPreferences: secureWebPrefs,
   });
-  editorWin.loadURL(`${EDITOR_URL}?theme=${encodeURIComponent(store.getSettings().theme)}${DEBUG_QUERY}`);
+  editorWin.loadURL(`${EDITOR_URL}?${new URLSearchParams(themeParams())}${DEBUG_QUERY}`);
   editorWin.once('ready-to-show', () => editorWin.show());
   editorWin.on('closed', () => {
     editorWin = null;
@@ -151,7 +164,7 @@ async function openPlayer(eventId, startItemId) {
   });
   playerWin = win;
   playerSession = session;
-  const q = new URLSearchParams({ event: eventId, theme: store.getSettings().theme });
+  const q = new URLSearchParams({ event: eventId, ...themeParams() });
   if (startItemId) q.set('start', startItemId);
   win.loadURL(`${PLAYER_URL}?${q}${DEBUG_QUERY}`);
   win.once('ready-to-show', () => {
@@ -241,10 +254,52 @@ function registerIpc() {
   handle('items:update', (eventId, itemId, patch) => store.updateItem(eventId, itemId, patch));
   handle('items:pageCount', (eventId, itemId, n) => store.setItemPageCount(eventId, itemId, n));
   handle('settings:get', () => store.getSettings());
+  const syncWindowColor = () => {
+    if (editorWin) editorWin.setBackgroundColor(themeBackground());
+  };
   handle('settings:update', (patch) => {
     const settings = store.updateSettings(patch);
-    if (patch && 'theme' in patch && editorWin) editorWin.setBackgroundColor(themeBackground());
+    if (patch && 'theme' in patch) syncWindowColor();
     return settings;
+  });
+  handle('themes:list', () => store.listThemes());
+  handle('themes:save', (theme) => {
+    const saved = store.saveTheme(theme);
+    syncWindowColor(); // the theme in use may be the one that changed
+    return saved;
+  });
+  handle('themes:delete', (id) => {
+    const settings = store.deleteTheme(id);
+    syncWindowColor();
+    return settings;
+  });
+  // Pick a theme file (PK Player, Ghostty or iTerm2), save it as a new custom theme. Returns null if cancelled.
+  handle('themes:import', async () => {
+    const res = await dialog.showOpenDialog(editorWin, {
+      title: 'Import theme',
+      properties: ['openFile'],
+      filters: [{ name: 'Theme files', extensions: ['json', 'itermcolors', 'txt', 'conf', '*'] }],
+    });
+    if (res.canceled || !res.filePaths.length) return null;
+    const file = res.filePaths[0];
+    const { size } = await fs.promises.stat(file);
+    if (size > THEME_FILE_MAX_BYTES) throw new Error('That file is too large to be a theme.');
+    const text = await fs.promises.readFile(file, { encoding: 'utf-8' });
+    return store.saveTheme(parseThemeFile(text, file));
+  });
+  // Write a custom theme to a file the user chooses. Returns the path, or null if cancelled.
+  handle('themes:export', async (id) => {
+    const theme = store.listThemes().find((t) => t.id === id);
+    if (!theme) throw new Error('Only your own themes can be exported.');
+    const safeName = theme.name.replace(/[^\w .-]+/g, ' ').trim() || 'theme';
+    const res = await dialog.showSaveDialog(editorWin, {
+      title: 'Export theme',
+      defaultPath: `${safeName}.pkplayer-theme.json`,
+      filters: [{ name: 'PK Player theme', extensions: ['json'] }],
+    });
+    if (res.canceled || !res.filePath) return null;
+    await fs.promises.writeFile(res.filePath, exportTheme(theme), { encoding: 'utf-8' });
+    return res.filePath;
   });
   handle('displays:list', () => listDisplays());
   handle('resume:get', (eventId) => resumePoints.get(eventId) || null);

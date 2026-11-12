@@ -120,3 +120,37 @@ The **Theme** menu under Present on changes PK Player's colors. The choice is sa
 - **Projector** is black and white with one bright accent, for washed-out projectors and bright rooms.
 - Every theme was made for PK Player. None is taken from another project's color scheme.
 - The yellow and red badges described above use each theme's own warning and error colors, so their exact shade varies.
+
+### Your own themes
+
+**Customize…** under the Theme menu opens the theme editor. The window behind it repaints as you change things, so you see the real result before saving.
+
+![The theme editor with a live preview behind it](img/12-theme-editor.png)
+
+- A theme is a name and six colors: **Background**, **Text**, **Accent** (the Play button and the selection), **Warning**, **Error** and **OK**. PK Player works out every other shade (cards, borders, dim text, hover states) from those six.
+- For each color, click the swatch to use your system's color picker, or type a value such as `#2dd4bf`.
+- Whether the theme is dark or light follows the background color. There is no separate switch.
+- If a color would be hard to read (pale text on a pale background, say), PK Player shows it slightly adjusted and a line in the editor tells you which colors were adjusted. Your own values are what gets saved.
+- **Save** keeps the theme and switches to it. **Cancel** or **Esc** puts the previous colors back.
+
+Built-in themes are never changed. Customizing one starts a copy ("Midnight Teal copy") that is saved under **Your themes** at the bottom of the Theme menu. Customizing one of your own themes edits it in place, and the editor then also offers:
+
+- **Delete** removes the theme after asking. If it was in use, PK Player goes back to Midnight Teal.
+- **Export…** writes the saved theme to a small `.pkplayer-theme.json` file you can share or keep as a backup.
+
+You can keep up to 100 themes of your own. They are stored with your events (see [Where your data lives](06-installing.md#where-your-data-lives)).
+
+### Importing a theme
+
+**Import…** adds a theme from a file and switches to it. Three kinds of file work:
+
+| File | Where it comes from |
+| --- | --- |
+| `.pkplayer-theme.json` | **Export…** in PK Player |
+| A Ghostty theme file | The Ghostty terminal's `themes` folder, or one you wrote |
+| `.itermcolors` | iTerm2's color presets |
+
+From a terminal color scheme PK Player takes the background and text colors, and uses the scheme's blue for the accent, yellow for warnings, red for errors and green for OK. Use **Customize…** afterwards if you would like a different accent.
+
+PK Player does not include any terminal color schemes itself. Importing reads a file that you provide, and the result is stored only on your computer.
+

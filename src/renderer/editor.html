@@ -23,6 +23,10 @@
         <select id="displaySelect" class="select"></select>
         <label class="field-label" for="themeSelect">Theme</label>
         <select id="themeSelect" class="select"></select>
+        <div class="theme-actions">
+          <button id="themeCustomize" class="btn btn-sm" title="Change this theme's colors. A built-in theme is copied first.">Customize…</button>
+          <button id="themeImport" class="btn btn-sm" title="Add a theme from a PK Player, Ghostty or iTerm2 theme file">Import…</button>
+        </div>
       </footer>
     </aside>
 
@@ -81,6 +85,23 @@
       <div id="busy" class="busy" hidden><div class="spinner"></div><div id="busyText">Importing…</div></div>
     </main>
   </div>
+  <dialog id="themeDialog" class="theme-dialog" aria-labelledby="themeDialogTitle">
+    <form id="themeForm" method="dialog" novalidate>
+      <h2 id="themeDialogTitle">Customize theme</h2>
+      <p class="muted small">The window behind shows your changes as you make them.</p>
+      <label class="field-label" for="themeName">Name</label>
+      <input id="themeName" class="input" type="text" maxlength="60" spellcheck="false">
+      <div id="themeColors" class="theme-colors"></div>
+      <p id="themeNote" class="theme-note small" hidden></p>
+      <div class="theme-buttons">
+        <button type="button" id="themeDelete" class="btn btn-sm btn-ghost btn-danger">Delete</button>
+        <button type="button" id="themeExport" class="btn btn-sm btn-ghost">Export…</button>
+        <span class="spacer"></span>
+        <button type="button" id="themeCancel" class="btn btn-sm">Cancel</button>
+        <button type="submit" id="themeSave" class="btn btn-sm btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
   <div id="toasts" class="toasts" aria-live="polite"></div>
 </body>
 </html>

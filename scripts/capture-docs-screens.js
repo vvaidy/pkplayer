@@ -2,7 +2,7 @@
 // Opens windows and goes FULLSCREEN — don't run while you're using the computer.
 // Usage: node scripts/capture-docs-screens.js     (writes docs/manual/img/*.png)
 //        PK_DOCS_EDITOR_ONLY=1 node scripts/capture-docs-screens.js
-//          only the editor screenshots (01-06): one normal window, nothing fullscreen
+//          only the editor screenshots (01-06 and 12): one normal window, nothing fullscreen
 import { _electron as electron } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -69,6 +69,16 @@ async function main() {
     await shot(editor.locator('.props'), '03-settings.png');
     await shot(editor.locator('.row').nth(3), '04-row-warning.png');
     await shot(editor.locator('.sidebar-foot'), '05-present-on.png');
+
+    // Theme editor, part-way through making a theme, with its live preview behind it.
+    await editor.click('#themeCustomize');
+    await editor.fill('#themeName', 'Harbor Lights');
+    await editor.fill('#themeHex-accent', '#ff7ac6');
+    await editor.fill('#themeHex-bg', '#11131f');
+    await editor.waitForTimeout(400);
+    await shot(editor, '12-theme-editor.png');
+    await editor.click('#themeCancel');
+    await editor.waitForTimeout(300);
 
     // Drop overlay (normally shown while dragging files over the window).
     await editor.evaluate(() => { document.getElementById('dropOverlay').hidden = false; });

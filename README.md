@@ -54,7 +54,7 @@ Then, when you need them:
 - To reorder, drag rows, use the ↑/↓ buttons, or press ⌥↑/⌥↓ on a focused row. To remove a row, use ✕ or press Delete.
 - Rows show page count, that deck's run time, and warnings: more pages than Max Slides, fewer pages (PechaKucha and Ignite formats only), or a page shape that differs from most other decks. The summary counts the decks that need a look.
 - **Present on** chooses which display goes fullscreen.
-- **Theme** picks from 11 color themes, dark and light, all made for PK Player. It colors the editor and the player's own controls, never your slides. "Vibe with Claude" is the original look.
+- **Theme** picks from 11 color themes, dark and light, all made for PK Player. It colors the editor and the player's own controls, never your slides. "Vibe with Claude" is the original look. **Customize…** makes your own theme from six colors with a live preview; **Import…** reads a PK Player, Ghostty or iTerm2 theme file.
 - Play options: **Play** (or **F**), ▶ on a row to start from that PDF, or Enter on a focused row.
 
 ## Player keys

@@ -6,7 +6,9 @@ import { preflight } from '../lib/preflight.js';
 import { suggestFromMetadata } from '../lib/deck-label.js';
 import { openPdf, renderPage } from './pdf.js';
 import { applyTheme } from './theme.js';
-import { THEMES, themeById } from '../lib/themes.js';
+import {
+  BASE_COLOR_KEYS, BASE_COLOR_LABELS, THEMES, isCustomThemeId, modeFor, normalizeTheme, themeById, themeVars, toHexColor,
+} from '../lib/themes.js';
 
 const pk = window.pk;
 const $ = (id) => document.getElementById(id);
@@ -19,6 +21,7 @@ const state = {
   selectedId: null,
   displays: [],
   settings: { displayId: null, theme: null },
+  themes: [], // the user's own themes; built-in ones come from THEMES
   resumeItemId: null,
 };
 
@@ -705,9 +708,171 @@ function setupDragAndDrop() {
 
 // ---------- displays ----------
 
-/** Show the saved theme: colors on the page and the choice in the Theme menu. */
+/** The saved theme with this id: one of the user's own, or a built-in one (the default if unknown). */
+function themeFor(id) {
+  return state.themes.find((t) => t.id === id) || themeById(id);
+}
+
+/** Show the saved theme: the Theme menu's entries and choice, and the colors on the page. */
 function renderTheme() {
-  $('themeSelect').value = applyTheme(themeById(state.settings.theme).id).id;
+  const sel = $('themeSelect');
+  const groups = [
+    ['Dark', THEMES.filter((t) => t.mode === 'dark')],
+    ['Light', THEMES.filter((t) => t.mode === 'light')],
+    ['Your themes', state.themes],
+  ];
+  sel.replaceChildren(...groups.filter(([, list]) => list.length).map(([label, list]) => {
+    const group = document.createElement('optgroup');
+    group.label = label;
+    group.append(...list.map((t) => new Option(t.name, t.id)));
+    return group;
+  }));
+  sel.value = applyTheme(themeFor(state.settings.theme)).id;
+}
+
+// ---------- theme editor ----------
+
+/** The theme being edited: { id?, name, base }. null when the editor is closed. */
+let themeDraft = null;
+
+/** Read the editor's fields into a checked theme, or return null (marking the bad field) if one is not a color. */
+function readThemeDraft() {
+  const base = {};
+  let ok = true;
+  for (const key of BASE_COLOR_KEYS) {
+    const hexEl = $(`themeHex-${key}`);
+    const color = toHexColor(hexEl.value);
+    hexEl.classList.toggle('invalid', !color);
+    if (color) base[key] = color;
+    else ok = false;
+  }
+  if (!ok) return null;
+  return normalizeTheme({ id: themeDraft.id, name: $('themeName').value, mode: modeFor(base.bg), base });
+}
+
+/** Preview the fields on the whole window and say which colors were nudged to stay readable. */
+function previewThemeDraft() {
+  const theme = readThemeDraft();
+  const note = $('themeNote');
+  note.classList.toggle('error', !theme);
+  if (!theme) {
+    // Said inside the dialog: a toast would sit underneath it.
+    note.hidden = false;
+    note.textContent = 'One of the colors is not valid yet. Use the form #1a2b3c.';
+    return;
+  }
+  applyTheme(theme);
+  const vars = themeVars(theme);
+  const nudged = ['text', 'accent', 'warn', 'danger', 'ok'].filter((k) => vars[`--${k}`] !== theme.base[k]);
+  note.hidden = nudged.length === 0;
+  note.textContent = nudged.length
+    ? `Shown slightly adjusted so it stays readable: ${nudged.map((k) => BASE_COLOR_LABELS[k].split(' (')[0]).join(', ')}.`
+    : '';
+}
+
+function openThemeEditor() {
+  const current = themeFor(state.settings.theme);
+  const own = isCustomThemeId(current.id);
+  // A built-in theme is never changed: editing one starts a copy that is saved as a new theme.
+  themeDraft = own ? { id: current.id, name: current.name } : { name: `${current.name} copy` };
+  $('themeDialogTitle').textContent = own ? 'Customize theme' : `New theme from ${current.name}`;
+  $('themeName').value = themeDraft.name;
+  for (const key of BASE_COLOR_KEYS) {
+    $(`themeHex-${key}`).value = current.base[key];
+    $(`themeColor-${key}`).value = current.base[key];
+  }
+  $('themeDelete').hidden = !own;
+  $('themeExport').hidden = !own;
+  previewThemeDraft();
+  $('themeDialog').showModal();
+  $('themeName').select();
+}
+
+function closeThemeEditor() {
+  themeDraft = null;
+  if ($('themeDialog').open) $('themeDialog').close();
+  renderTheme(); // back to whatever is saved
+}
+
+async function saveThemeDraft() {
+  const theme = readThemeDraft();
+  if (!theme) {
+    previewThemeDraft(); // shows which field is wrong, inside the dialog
+    return;
+  }
+  const saved = await guarded('Saving theme', () => pk.saveTheme(theme));
+  if (!saved) return;
+  state.themes = [...state.themes.filter((t) => t.id !== saved.id), saved];
+  const s = await guarded('Saving theme', () => pk.updateSettings({ theme: saved.id }));
+  if (s) state.settings = s;
+  closeThemeEditor();
+}
+
+async function deleteThemeDraft() {
+  const id = themeDraft?.id;
+  if (!id || !window.confirm(`Delete the theme “${themeFor(id).name}”? This cannot be undone.`)) return;
+  const s = await guarded('Deleting theme', () => pk.deleteTheme(id));
+  if (!s) return;
+  state.settings = s;
+  state.themes = state.themes.filter((t) => t.id !== id);
+  closeThemeEditor();
+}
+
+async function exportThemeDraft() {
+  const file = await guarded('Exporting theme', () => pk.exportTheme(themeDraft.id));
+  if (file) toast(`Exported the saved theme to ${file.split(/[\\/]/).pop()}`, 'ok', 5000);
+}
+
+async function importTheme() {
+  const theme = await guarded('Importing theme', () => pk.importTheme());
+  if (!theme) return; // cancelled, or the error was already shown
+  state.themes = [...state.themes, theme];
+  const s = await guarded('Saving theme', () => pk.updateSettings({ theme: theme.id }));
+  if (s) state.settings = s;
+  renderTheme();
+  toast(`Imported “${theme.name}”. Use Customize… to adjust it.`, 'ok', 5000);
+}
+
+function wireThemeEditor() {
+  // One row per base color: a label, the system color picker, and a hex field. The two stay in step.
+  $('themeColors').replaceChildren(...BASE_COLOR_KEYS.flatMap((key) => {
+    const label = document.createElement('label');
+    label.textContent = BASE_COLOR_LABELS[key];
+    label.htmlFor = `themeHex-${key}`;
+    const picker = Object.assign(document.createElement('input'), { type: 'color', id: `themeColor-${key}` });
+    picker.setAttribute('aria-label', `${BASE_COLOR_LABELS[key]} color picker`);
+    const hex = Object.assign(document.createElement('input'), {
+      type: 'text', id: `themeHex-${key}`, className: 'input hex', maxLength: 7, spellcheck: false,
+    });
+    picker.addEventListener('input', () => {
+      hex.value = picker.value;
+      previewThemeDraft();
+    });
+    hex.addEventListener('input', () => {
+      const color = toHexColor(hex.value);
+      if (color) picker.value = color;
+      previewThemeDraft();
+    });
+    return [label, picker, hex];
+  }));
+  $('themeCustomize').addEventListener('click', openThemeEditor);
+  $('themeImport').addEventListener('click', importTheme);
+  $('themeCancel').addEventListener('click', closeThemeEditor);
+  $('themeDelete').addEventListener('click', deleteThemeDraft);
+  $('themeExport').addEventListener('click', exportThemeDraft);
+  $('themeForm').addEventListener('submit', (e) => {
+    e.preventDefault(); // stay open until the save has worked
+    saveThemeDraft();
+  });
+  // Esc puts the saved colors back at once ("cancel" fires before the dialog closes)...
+  $('themeDialog').addEventListener('cancel', (e) => {
+    e.preventDefault();
+    closeThemeEditor();
+  });
+  // ...and so does anything else that closes the dialog without saving.
+  $('themeDialog').addEventListener('close', () => {
+    if (themeDraft) closeThemeEditor();
+  });
 }
 
 function renderDisplays() {
@@ -771,13 +936,8 @@ function wireControls() {
     }
   });
 
+  wireThemeEditor();
   const themeEl = $('themeSelect');
-  for (const [label, mode] of [['Dark', 'dark'], ['Light', 'light']]) {
-    const group = document.createElement('optgroup');
-    group.label = label;
-    for (const t of THEMES.filter((x) => x.mode === mode)) group.append(new Option(t.name, t.id));
-    themeEl.append(group);
-  }
   themeEl.addEventListener('change', async () => {
     const s = await guarded('Saving theme', () => pk.updateSettings({ theme: themeEl.value }));
     if (s) state.settings = s;
@@ -791,7 +951,7 @@ function wireControls() {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (isTyping(e.target)) return;
+    if (isTyping(e.target) || $('themeDialog').open) return; // no Play shortcut while typing or editing a theme
     if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       play();
@@ -814,11 +974,13 @@ function wireControls() {
 async function init() {
   wireControls();
   setupDragAndDrop();
-  const [settings, displays] = await Promise.all([
+  const [settings, displays, themes] = await Promise.all([
     guarded('Loading settings', () => pk.getSettings()),
     guarded('Listing displays', () => pk.listDisplays()),
+    guarded('Loading themes', () => pk.listThemes()),
   ]);
   if (settings) state.settings = settings;
+  state.themes = themes || [];
   state.displays = displays || [];
   renderDisplays();
   renderTheme();
