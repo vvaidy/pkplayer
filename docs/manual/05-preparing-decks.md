@@ -38,5 +38,5 @@ Then open the PDF and check: one page per slide, 20 pages, nothing missing.
 ## For organisers
 
 - Name the files with the presenter's name, e.g. `03-asha-tiny-gardens.pdf`. The file name is what the player shows on the Play screen.
-- Drop each deck into your event when it arrives and look for the yellow **only first 20 play** or red **Unreadable PDF** badges.
+- Drop each deck into your event when it arrives and look for yellow badges (**only first 20 play**, **only 17 slides**, **4:3, most are 16:9**) or the red **Unreadable PDF**. The summary line counts them: **2 decks need a look**.
 - Want to try the format first? The repository's `samples/demo/` folder has four ready-made decks.

@@ -7,7 +7,11 @@ This walks through a real event: collecting decks, setting up at the venue, runn
 1. Send presenters the [Preparing decks](05-preparing-decks.md) page. The essentials: **a PDF, 16:9, exactly 20 slides, no animations or video.**
 2. As decks arrive, drop them into your event. Check each row:
    - the page count — a yellow **only first 20 play** badge means the deck is too long and its last pages will never show. Tell the presenter now, not at the venue.
+   - **only 17 slides** — the deck is short and will end early.
+   - **4:3, most are 16:9** — this deck is a different shape from the others and will show black bars.
    - the thumbnail — a red **Unreadable PDF** means the file is broken; ask for a re-export.
+
+   The summary line under the settings counts the flagged decks (**2 decks need a look**), so one glance tells you whether anything is outstanding.
 3. Order the playlist in running order. If you'll have an intermission, consider two events (*Night — Part 1*, *Night — Part 2*); **Duplicate** copies an event with its playlist, which is a quick way to split one.
 
 PDFs are copied into PK Player's library when you add them, so a presenter sending a fixed version means: remove the old row, add the new file.

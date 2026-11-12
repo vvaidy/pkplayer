@@ -19,7 +19,7 @@
 - **Slides look the way the presenter made them.** A PDF carries its own fonts and layout, so nothing shifts on the event laptop.
 - **Timing that doesn't drift.** Every slide gets exactly its time, measured at ±10 ms per slide.
 - **A clean handover between presenters.** After a deck's last slide, the next deck waits on a Play button. Nothing advances until you press Space.
-- **Over-long decks are capped.** A deck with more pages than Max slides is flagged in the playlist, and the extra pages are never shown.
+- **Problem decks are flagged before the night.** The playlist marks decks that are too long, too short, or a different shape from the others. Pages beyond Max slides are never shown.
 - **Any timed format.** 20 slides × 20 seconds is the default. The **Format** menu switches to Ignite (20 slides × 15 seconds) in one click, or you can set anything from 1 second to an hour per slide.
 
 ![A deck waiting on its Play button](docs/manual/img/07-player-waiting.png)
@@ -51,7 +51,7 @@ Then, when you need them:
 - Drop PDFs onto the playlist (at the drop position), onto an event in the sidebar, or anywhere in the window. With no event selected, dropping creates a new one. You can also use **Add PDFs…** (⌘O).
 - PDFs are copied into the app's library, so moving or deleting the originals is safe (File → Reveal Library Folder).
 - To reorder, drag rows, use the ↑/↓ buttons, or press ⌥↑/⌥↓ on a focused row. To remove a row, use ✕ or press Delete.
-- Rows show page count, a warning when a deck has more pages than Max Slides, and that deck's run time.
+- Rows show page count, that deck's run time, and warnings: more pages than Max Slides, fewer pages (PechaKucha and Ignite formats only), or a page shape that differs from most other decks. The summary counts the decks that need a look.
 - **Present on** chooses which display goes fullscreen.
 - Play options: **Play** (or **F**), ▶ on a row to start from that PDF, or Enter on a focused row.
 

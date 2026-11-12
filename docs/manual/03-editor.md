@@ -37,7 +37,7 @@ Change a value and press Enter or click elsewhere. An out-of-range value shakes,
 
 Format always shows what the two settings currently are. If you change either setting by hand to something that matches no format, it switches to **Custom**. Choosing Custom yourself changes nothing; it puts the cursor in Time per slide so you can type.
 
-Under the settings, the summary shows **PDFs · slides that will actually play · total slide time**. The total excludes the pauses on each Play button, so allow a little more on the night.
+Under the settings, the summary shows **PDFs · slides that will actually play · total slide time**, plus a yellow count of decks that need a look (see [Playlist](#playlist)). The total excludes the pauses on each Play button, so allow a little more on the night.
 
 ## Playlist
 
@@ -47,8 +47,14 @@ Each row shows, from left: drag handle, position, first-page thumbnail, file nam
 | --- | --- |
 | `20 pages` | Pages in the PDF. |
 | `only first 20 play` (yellow) | The PDF has more pages than Max slides; the rest are skipped. |
+| `only 17 slides` (yellow) | The PDF has fewer pages than Max slides, so this deck will end early. Shown only when Format is PechaKucha or Ignite. Under Custom, Max slides is just an upper limit and short decks are normal. |
+| `4:3, most are 16:9` (yellow) | The page shape differs from most other decks in this event, so this deck will show black bars that the others don't. |
 | `6:40` | How long this deck will run. |
 | `Cannot read this PDF — it will be skipped` (red) | The file is damaged or not really a PDF. The player skips it. |
+
+When any row has a yellow or red badge, the summary under the settings adds a count in yellow, e.g. **2 decks need a look**. Nothing is blocked: you can still play the event.
+
+The shape check looks at the first page of each PDF and compares decks with each other, not with your display. It only speaks up when one shape is clearly the most common: with one 16:9 deck and one 4:3 deck, neither is flagged.
 
 Row buttons (they brighten when you hover): **▶** play from this PDF, **↑ / ↓** move, **✕** remove.
 

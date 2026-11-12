@@ -165,6 +165,57 @@ test('editor: Format preset sets both settings, follows manual edits, and persis
   await app2.close();
 });
 
+test('editor: pre-flight flags short decks and the odd-shaped deck', async () => {
+  const { app, editor } = await launch();
+  await editor.click('#newEvent');
+  await editor.fill('#eventName', 'Preflight Night');
+  await editor.press('#eventName', 'Enter');
+  await editor.fill('#maxSlides', '5');
+  await editor.press('#maxSlides', 'Enter');
+  await expect(editor.locator('#preset')).toHaveValue('custom');
+  await stubOpenDialog(app, [
+    fx('alpha-5-slides.pdf'),
+    fx('bravo-25-slides.pdf'),
+    fx('delta-4x3-4-slides.pdf'),
+    fx('charlie-3-slides.pdf'),
+  ]);
+  await editor.click('#addPdfs');
+  await expect(editor.locator('.row')).toHaveCount(4);
+  const warns = (i) => editor.locator('.row').nth(i).locator('.badge.warn');
+
+  // Custom format: Max slides is only a cap, so short decks are fine. The 4:3 deck is the odd one out.
+  await expect(warns(2)).toHaveText(['4:3, most are 16:9']);
+  await expect(warns(0)).toHaveCount(0);
+  await expect(warns(1)).toHaveText(['only first 5 play']);
+  await expect(warns(3)).toHaveCount(0);
+  await expect(editor.locator('#summary .attention')).toHaveText('2 decks need a look');
+
+  // A named format expects full decks, so short ones are flagged too.
+  await editor.selectOption('#preset', 'pechakucha');
+  await expect(warns(0)).toHaveText(['only 5 slides']);
+  await expect(warns(1)).toHaveText(['only first 20 play']);
+  await expect(warns(2)).toHaveText(['only 4 slides', '4:3, most are 16:9']);
+  await expect(warns(3)).toHaveText(['only 3 slides']);
+  await expect(editor.locator('#summary .attention')).toHaveText('4 decks need a look');
+  await editor.screenshot({ path: path.join(SHOTS, 'editor-preflight.png') });
+
+  // Back to a cap with nothing over it: only the shape warning is left.
+  await editor.fill('#maxSlides', '30');
+  await editor.press('#maxSlides', 'Enter');
+  await expect(editor.locator('#summary .attention')).toHaveText('1 deck needs a look');
+
+  // With one 16:9 deck and one 4:3 deck there is no majority, so neither is flagged.
+  for (const name of ['bravo-25-slides.pdf', 'charlie-3-slides.pdf']) {
+    await editor.locator('.row', { hasText: name }).focus();
+    await editor.keyboard.press('Delete');
+    await expect(editor.locator('.row', { hasText: name })).toHaveCount(0);
+  }
+  expect(await rowNames(editor)).toEqual(['alpha-5-slides.pdf', 'delta-4x3-4-slides.pdf']);
+  await expect(editor.locator('.badge.warn')).toHaveCount(0);
+  await expect(editor.locator('#summary .attention')).toHaveCount(0);
+  await app.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });

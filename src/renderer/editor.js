@@ -2,6 +2,7 @@
 import { debug } from '../lib/debug.js';
 import { slidesToPlay } from '../lib/player-controller.js';
 import { CUSTOM_PRESET_ID, PRESETS, presetById, presetIdFor } from '../lib/presets.js';
+import { preflight } from '../lib/preflight.js';
 import { openPdf, renderPage } from './pdf.js';
 
 const pk = window.pk;
@@ -18,7 +19,7 @@ const state = {
   resumeItemId: null,
 };
 
-/** file -> { pageCount, thumb } once resolved, or { error } */
+/** file -> { pageCount, aspect, thumb } once resolved, or { error }. aspect is page 1's width / height. */
 const pdfInfo = new Map();
 const pdfInfoPending = new Map();
 
@@ -83,7 +84,12 @@ function loadPdfInfo(file) {
     try {
       doc = await openPdf(file);
       const canvas = await renderPage(doc, 1, THUMB_W, THUMB_H, { dpr: 1 });
-      const info = { pageCount: doc.numPages, thumb: canvas.toDataURL('image/jpeg', 0.85) };
+      const size = (await doc.getPage(1)).getViewport({ scale: 1 });
+      const info = {
+        pageCount: doc.numPages,
+        aspect: size.height > 0 ? size.width / size.height : null,
+        thumb: canvas.toDataURL('image/jpeg', 0.85),
+      };
       pdfInfo.set(file, info);
       return info;
     } catch (err) {
@@ -108,7 +114,7 @@ function hydrateItems(ev) {
         if (updated) it.pageCount = updated.pageCount;
       }
       if (state.selectedId === ev.id) {
-        updateRow(it);
+        updateRows(); // every row: one deck's shape can change another deck's warning
         renderSummary();
       }
       renderSidebar();
@@ -199,15 +205,31 @@ function itemStats(ev, it) {
   return { pages, plays: slidesToPlay(pages, ev.maxSlides) };
 }
 
+/** Pre-flight warnings for the event's decks: deck id -> [{ kind, text }]. */
+function deckWarnings(ev) {
+  const decks = ev.items.map((it) => {
+    const info = pdfInfo.get(it.file);
+    return { id: it.id, pages: info?.error ? null : (info?.pageCount ?? it.pageCount), aspect: info?.aspect ?? null };
+  });
+  return preflight(decks, {
+    maxSlides: ev.maxSlides,
+    // A named format means every deck should be full length; under Custom, Max slides is only a cap.
+    expectFullDecks: presetIdFor(ev.timePerSlide, ev.maxSlides) !== CUSTOM_PRESET_ID,
+  });
+}
+
 function renderSummary() {
   const ev = selected();
   if (!ev) return;
+  const warnings = deckWarnings(ev);
   let slides = 0;
   let unknown = false;
+  let flagged = 0;
   for (const it of ev.items) {
     const s = itemStats(ev, it);
     if (s.plays == null) unknown = true;
     else slides += s.plays;
+    if (s.error || (s.pages != null && s.pages > ev.maxSlides) || warnings.has(it.id)) flagged += 1;
   }
   const n = ev.items.length;
   const parts = [
@@ -215,6 +237,7 @@ function renderSummary() {
     `<strong>${slides}${unknown ? '+' : ''}</strong> slides`,
     `<strong>${fmtDuration(slides * ev.timePerSlide)}</strong> of slides`,
   ];
+  if (flagged) parts.push(`<span class="attention">${flagged} deck${flagged === 1 ? ' needs' : 's need'} a look</span>`);
   $('summary').innerHTML = parts.join(' · ');
   renderPlayButton();
 }
@@ -232,11 +255,12 @@ function renderPlayButton() {
 function renderPlaylist() {
   const ev = selected();
   const list = $('playlist');
-  list.replaceChildren(...ev.items.map((it, i) => buildRow(ev, it, i)));
+  const warnings = deckWarnings(ev);
+  list.replaceChildren(...ev.items.map((it, i) => buildRow(ev, it, i, warnings)));
   $('dropHint').classList.toggle('compact', ev.items.length > 0);
 }
 
-function buildRow(ev, it, i) {
+function buildRow(ev, it, i, warnings) {
   const li = document.createElement('li');
   li.className = 'row';
   li.dataset.id = it.id;
@@ -256,7 +280,7 @@ function buildRow(ev, it, i) {
   li.querySelector('.index').textContent = String(i + 1);
   li.querySelector('.file').textContent = it.name;
   li.querySelector('.file').title = it.name;
-  fillRowInfo(li, ev, it);
+  fillRowInfo(li, ev, it, warnings);
 
   li.querySelector('.play-here').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -306,7 +330,7 @@ function buildRow(ev, it, i) {
   return li;
 }
 
-function fillRowInfo(li, ev, it) {
+function fillRowInfo(li, ev, it, warnings) {
   const info = pdfInfo.get(it.file);
   const thumb = li.querySelector('.thumb');
   if (!info) {
@@ -335,14 +359,20 @@ function fillRowInfo(li, ev, it) {
   } else {
     badge(`${s.pages} page${s.pages === 1 ? '' : 's'}`);
     if (s.pages > ev.maxSlides) badge(`only first ${ev.maxSlides} play`, 'warn');
+    for (const w of warnings.get(it.id) || []) badge(w.text, 'warn');
     badge(fmtDuration(s.plays * ev.timePerSlide));
   }
 }
 
-function updateRow(it) {
+/** Refresh the badges and thumbnail of every row of the selected event. */
+function updateRows() {
   const ev = selected();
-  const li = $('playlist').querySelector(`[data-id="${CSS.escape(it.id)}"]`);
-  if (ev && li) fillRowInfo(li, ev, it);
+  if (!ev) return;
+  const warnings = deckWarnings(ev);
+  for (const it of ev.items) {
+    const li = $('playlist').querySelector(`[data-id="${CSS.escape(it.id)}"]`);
+    if (li) fillRowInfo(li, ev, it, warnings);
+  }
 }
 
 // ---------- actions ----------
@@ -376,7 +406,7 @@ async function saveEventPatch(patch, inputEl) {
     renderSidebar();
     if ('maxSlides' in patch || 'timePerSlide' in patch) {
       renderSettings(updated, { keepFocused: Boolean(inputEl) });
-      for (const it of updated.items) updateRow(it);
+      updateRows();
       renderSummary();
     }
   } catch (err) {

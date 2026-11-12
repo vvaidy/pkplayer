@@ -127,6 +127,7 @@ The Windows build is unsigned, so SmartScreen warns on first launch. Signing it 
 | `preload.cjs` | The bridge (`window.pk`) between pages and the main process. |
 | `src/main/store.js` | Events, settings and the PDF library on disk. |
 | `src/lib/presets.js` | The Format presets (PechaKucha, Ignite). |
+| `src/lib/preflight.js` | Deck warnings: short decks and odd page shapes. |
 | `src/lib/player-controller.js` | Pure timing state machine (waiting / playing / paused / ended). |
 | `src/renderer/` | Editor and player pages; pdf.js rendering in `pdf.js`. |
 | `test/unit/`, `test/e2e/` | Unit and end-to-end tests. |
