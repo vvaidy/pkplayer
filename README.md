@@ -1,6 +1,10 @@
 # PK Player
 
-PechaKucha PDF player. Build an **Event** (time per slide, max slides, playlist of PDFs), hit **Play**, and each deck runs fullscreen on a fixed timer.
+**Run a PechaKucha-style night straight from PDFs.** Drop every presenter's deck into one playlist and press Play. Each deck runs fullscreen at 20 seconds a slide, then stops on a big Play button until the next presenter is ready.
+
+**[⬇ Download the latest version](https://github.com/vvaidy/pkplayer/releases/latest)** for Mac, Windows or Linux. It's free and open source. Read the no-warranty notice below before you use it.
+
+![The PK Player editor with a four-deck event](docs/manual/img/02-event.png)
 
 > [!CAUTION]
 > ## ⚠️ NO WARRANTY — USE ENTIRELY AT YOUR OWN RISK
@@ -9,12 +13,37 @@ PechaKucha PDF player. Build an **Event** (time per slide, max slides, playlist 
 > [!WARNING]
 > **Only tested on one Mac.** PK Player has been run and tested only on a Mac with Apple silicon (M4 Max) running macOS 26.6.2 (Tahoe). The Intel Mac, Windows and Linux versions are built automatically but have **never been run or tested**. They may not work at all.
 
-**📖 [User manual](docs/manual/README.md)** — tutorials, reference, troubleshooting, and how to build and release.
+## Why use it
 
-## Install / run
+- **One playlist for the whole night.** Presenters send a PDF. You drop the files in and drag them into order. There are no timings to set up inside each file.
+- **Slides look the way the presenter made them.** A PDF carries its own fonts and layout, so nothing shifts on the event laptop.
+- **Timing that doesn't drift.** Every slide gets exactly its time, measured at ±10 ms per slide.
+- **A clean handover between presenters.** After a deck's last slide, the next deck waits on a Play button. Nothing advances until you press Space.
+- **Over-long decks are capped.** A deck with more pages than Max slides is flagged in the playlist, and the extra pages are never shown.
+- **Any timed format.** 20 slides × 20 seconds is the default. Set 15 seconds for Ignite-style talks, or anything from 1 second to an hour per slide.
 
-- Installers: `npm run dist` (Mac), `npm run dist:win`, `npm run dist:linux` → `dist/PK-Player-<version>-<os>-<arch>.<ext>`, or let GitHub Actions build all three (see [Building & releasing](docs/manual/08-building-and-releasing.md)). Mac release builds are signed and notarized, in CI or locally with `npm run dist:mac:signed`; Windows and Linux builds are unsigned. See [first-launch warnings](docs/manual/06-installing.md#first-launch-warnings).
-- From source: `npm install`, then `npm start`.
+![A deck waiting on its Play button](docs/manual/img/07-player-waiting.png)
+
+## Get started
+
+1. **Download** the file for your computer from the [latest release](https://github.com/vvaidy/pkplayer/releases/latest):
+
+   | Computer | File |
+   | --- | --- |
+   | Mac with Apple silicon (M1 or later) | `PK-Player-<version>-mac-arm64.dmg` |
+   | Mac with Intel processor | `PK-Player-<version>-mac-x64.dmg` |
+   | Windows 10/11 (64-bit) | `PK-Player-<version>-win-x64.exe` |
+   | Linux (64-bit) | `PK-Player-<version>-linux-x86_64.AppImage` |
+
+2. **Install it.** [Installing PK Player](docs/manual/06-installing.md) covers each system and the first-launch prompt.
+3. **Run your first event** with the [five-minute tutorial](docs/manual/01-getting-started.md).
+
+Then, when you need them:
+
+- [Running a live night](docs/manual/02-running-a-live-night.md), for a real event with a projector and an audience
+- [Preparing decks](docs/manual/05-preparing-decks.md), to send to your presenters
+- [Troubleshooting & FAQ](docs/manual/07-troubleshooting.md)
+- **📖 [The full manual](docs/manual/README.md)**, also in the app's Help menu
 
 ## Editor
 
@@ -39,6 +68,11 @@ PechaKucha PDF player. Build an **Event** (time per slide, max slides, playlist 
 
 Each deck plays `min(pages, Max Slides)` slides and then stops on the next deck's Play button. Pages beyond Max Slides are skipped. After the last deck it shows "End of event". If you stop mid-event, the editor offers **Play from #N** to restart at that PDF. Timing is deadline-based, so it doesn't drift; measured at ±10 ms per slide. Display sleep is blocked while the player is open.
 
+## Building from source
+
+- Installers: `npm run dist` (Mac), `npm run dist:win`, `npm run dist:linux` → `dist/PK-Player-<version>-<os>-<arch>.<ext>`, or let GitHub Actions build all three (see [Building & releasing](docs/manual/08-building-and-releasing.md)). Mac release builds are signed and notarized, in CI or locally with `npm run dist:mac:signed`; Windows and Linux builds are unsigned. See [first-launch warnings](docs/manual/06-installing.md#first-launch-warnings).
+- From source: `npm install`, then `npm start`.
+
 ## Development
 
 ```bash
@@ -59,3 +93,5 @@ Layout: `main.js` (main process, `app://` protocol, IPC), `preload.cjs` (bridge)
 ## License
 
 MIT. See [LICENSE](LICENSE). **No warranty: you use PK Player entirely at your own risk.**
+
+PK Player is an independent project. It is not affiliated with or endorsed by the PechaKucha organization, and "PechaKucha" is a trademark of its owner.
