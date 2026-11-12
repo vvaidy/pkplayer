@@ -122,6 +122,49 @@ test('editor: create event, set properties, import, reorder, remove, persist', a
   await app2.close();
 });
 
+test('editor: Format preset sets both settings, follows manual edits, and persists', async () => {
+  const { app, editor } = await launch();
+  await editor.click('#newEvent');
+  await editor.fill('#eventName', 'Preset Night');
+  await editor.press('#eventName', 'Enter');
+
+  // A new event is 20 x 20, which is the PechaKucha preset.
+  await expect(editor.locator('#preset')).toHaveValue('pechakucha');
+  await expect(editor.locator('#preset option')).toHaveText(['PechaKucha', 'Ignite', 'Custom']);
+
+  // Choosing Ignite sets both fields and the sidebar summary.
+  await editor.selectOption('#preset', 'ignite');
+  await expect(editor.locator('#timePerSlide')).toHaveValue('15');
+  await expect(editor.locator('#maxSlides')).toHaveValue('20');
+  await expect(editor.locator('.event-item.selected .meta')).toContainText('15s × 20');
+
+  // Editing a field by hand moves the preset to Custom, and back when it matches again.
+  await editor.fill('#maxSlides', '12');
+  await editor.press('#maxSlides', 'Enter');
+  await expect(editor.locator('#preset')).toHaveValue('custom');
+  await editor.fill('#maxSlides', '20');
+  await editor.press('#maxSlides', 'Enter');
+  await expect(editor.locator('#preset')).toHaveValue('ignite');
+
+  // Choosing Custom changes nothing and puts the cursor in Time per slide.
+  await editor.selectOption('#preset', 'custom');
+  await expect(editor.locator('#timePerSlide')).toBeFocused();
+  await expect(editor.locator('#timePerSlide')).toHaveValue('15');
+  await expect(editor.locator('#maxSlides')).toHaveValue('20');
+
+  // Back to PechaKucha, and it survives a restart.
+  await editor.selectOption('#preset', 'pechakucha');
+  await expect(editor.locator('#timePerSlide')).toHaveValue('20');
+  await editor.screenshot({ path: path.join(SHOTS, 'editor-preset.png') });
+  await editor.selectOption('#preset', 'ignite');
+  await expect(editor.locator('#timePerSlide')).toHaveValue('15');
+  await app.close();
+  const { app: app2, editor: editor2 } = await launch();
+  await expect(editor2.locator('#preset')).toHaveValue('ignite');
+  await expect(editor2.locator('#timePerSlide')).toHaveValue('15');
+  await app2.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });

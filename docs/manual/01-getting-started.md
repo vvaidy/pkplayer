@@ -16,14 +16,14 @@ If macOS or Windows asks before opening the app the first time, see [First-launc
 
 Click **+ New Event** (or press ⌘N / Ctrl+N). A new event appears in the sidebar and its name is ready to edit at the top. Type a name — say *Friday PechaKucha Night* — and press Enter.
 
-Two settings sit under the name:
+Two settings sit under the name, next to a **Format** menu that fills them in for you (PechaKucha, Ignite, or Custom):
 
 ![Event settings](img/03-settings.png)
 
 - **Time per slide** — seconds each slide is on screen. PechaKucha is 20.
 - **Max slides** — the most pages any single PDF may show. PechaKucha is 20.
 
-Leave both at 20. The line to the right adds things up for you: number of PDFs, total slides that will play, and total slide time.
+Leave both at 20. The line underneath adds things up for you: number of PDFs, total slides that will play, and total slide time.
 
 ## 3. Add the decks
 

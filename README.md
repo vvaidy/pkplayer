@@ -20,7 +20,7 @@
 - **Timing that doesn't drift.** Every slide gets exactly its time, measured at ±10 ms per slide.
 - **A clean handover between presenters.** After a deck's last slide, the next deck waits on a Play button. Nothing advances until you press Space.
 - **Over-long decks are capped.** A deck with more pages than Max slides is flagged in the playlist, and the extra pages are never shown.
-- **Any timed format.** 20 slides × 20 seconds is the default. Set 15 seconds for Ignite-style talks, or anything from 1 second to an hour per slide.
+- **Any timed format.** 20 slides × 20 seconds is the default. The **Format** menu switches to Ignite (20 slides × 15 seconds) in one click, or you can set anything from 1 second to an hour per slide.
 
 ![A deck waiting on its Play button](docs/manual/img/07-player-waiting.png)
 
@@ -47,7 +47,7 @@ Then, when you need them:
 
 ## Editor
 
-- **+ New** creates an Event (defaults: 20 s per slide, 20 max slides).
+- **+ New** creates an Event (defaults: 20 s per slide, 20 max slides). **Format** sets both at once: PechaKucha (20 × 20 s), Ignite (20 × 15 s) or Custom.
 - Drop PDFs onto the playlist (at the drop position), onto an event in the sidebar, or anywhere in the window. With no event selected, dropping creates a new one. You can also use **Add PDFs…** (⌘O).
 - PDFs are copied into the app's library, so moving or deleting the originals is safe (File → Reveal Library Folder).
 - To reorder, drag rows, use the ↑/↓ buttons, or press ⌥↑/⌥↓ on a focused row. To remove a row, use ✕ or press Delete.

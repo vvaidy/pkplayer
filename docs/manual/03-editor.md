@@ -6,7 +6,7 @@ The editor is the window you see when PK Player opens. Left: your events and the
 
 ## Events
 
-An **Event** has a name, two settings, and a playlist of PDFs. Events are saved automatically as you edit — there is no Save button.
+An **Event** has a name, two settings (with a Format shortcut for them), and a playlist of PDFs. Events are saved automatically as you edit — there is no Save button.
 
 | Action | How |
 | --- | --- |
@@ -27,7 +27,17 @@ An **Event** has a name, two settings, and a playlist of PDFs. Events are saved 
 
 Change a value and press Enter or click elsewhere. An out-of-range value shakes, shows an error and reverts.
 
-Next to the settings, the summary shows **PDFs · slides that will actually play · total slide time**. The total excludes the pauses on each Play button, so allow a little more on the night.
+**Format** sets both values in one step:
+
+| Format | Time per slide | Max slides |
+| --- | --- | --- |
+| PechaKucha | 20 sec | 20 |
+| Ignite | 15 sec | 20 |
+| Custom | whatever you type | whatever you type |
+
+Format always shows what the two settings currently are. If you change either setting by hand to something that matches no format, it switches to **Custom**. Choosing Custom yourself changes nothing; it puts the cursor in Time per slide so you can type.
+
+Under the settings, the summary shows **PDFs · slides that will actually play · total slide time**. The total excludes the pauses on each Play button, so allow a little more on the night.
 
 ## Playlist
 

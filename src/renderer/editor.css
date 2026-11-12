@@ -76,12 +76,14 @@
 .event-actions { display: flex; gap: 6px; }
 
 .props {
-  display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap;
+  display: flex; align-items: flex-end; gap: 12px 24px; flex-wrap: wrap;
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px 18px; margin-bottom: 22px;
 }
 .prop { display: flex; flex-direction: column; gap: 6px; }
-.prop.summary { display: block; color: var(--text-dim); font-size: 13px; padding-bottom: 9px; white-space: nowrap; }
+.prop .select { height: 36px; } /* same height as the number fields beside it */
+/* The summary has its own line under the fields, so Play stays on the first line at any width. */
+.prop.summary { display: block; order: 9; flex-basis: 100%; color: var(--text-dim); font-size: 13px; }
 .summary strong { color: var(--text); }
 .play-group { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 

@@ -1,6 +1,7 @@
 // Editor window: manage Events, their settings and PDF playlists.
 import { debug } from '../lib/debug.js';
 import { slidesToPlay } from '../lib/player-controller.js';
+import { CUSTOM_PRESET_ID, PRESETS, presetById, presetIdFor } from '../lib/presets.js';
 import { openPdf, renderPage } from './pdf.js';
 
 const pk = window.pk;
@@ -172,11 +173,22 @@ function renderEvent() {
   }
   $('emptyState').hidden = true;
   if (document.activeElement !== $('eventName')) $('eventName').value = ev.name;
-  $('timePerSlide').value = ev.timePerSlide;
-  $('maxSlides').value = ev.maxSlides;
+  renderSettings(ev);
   renderPlaylist();
   renderSummary();
   hydrateItems(ev);
+}
+
+/**
+ * Show the event's two settings, and the preset they match (or "Custom").
+ * With keepFocused, a field the user is typing in is left alone, so a typed
+ * edit whose save finishes late never overwrites what they typed next.
+ */
+function renderSettings(ev, { keepFocused = false } = {}) {
+  for (const key of ['timePerSlide', 'maxSlides']) {
+    if (!keepFocused || document.activeElement !== $(key)) $(key).value = ev[key];
+  }
+  $('preset').value = presetIdFor(ev.timePerSlide, ev.maxSlides);
 }
 
 function itemStats(ev, it) {
@@ -363,6 +375,7 @@ async function saveEventPatch(patch, inputEl) {
     inputEl?.classList.remove('invalid');
     renderSidebar();
     if ('maxSlides' in patch || 'timePerSlide' in patch) {
+      renderSettings(updated, { keepFocused: Boolean(inputEl) });
       for (const it of updated.items) updateRow(it);
       renderSummary();
     }
@@ -375,6 +388,8 @@ async function saveEventPatch(patch, inputEl) {
       inputEl.classList.add('invalid');
       const key = Object.keys(patch)[0];
       inputEl.value = ev[key];
+    } else if ('maxSlides' in patch || 'timePerSlide' in patch) {
+      renderSettings(ev); // a preset that could not be saved: show the real settings again
     }
   }
 }
@@ -629,6 +644,21 @@ function wireControls() {
       if (e.key === 'Enter') el.blur();
     });
   }
+
+  const presetEl = $('preset');
+  for (const p of [...PRESETS, { id: CUSTOM_PRESET_ID, label: 'Custom' }]) {
+    presetEl.append(new Option(p.label, p.id));
+  }
+  presetEl.addEventListener('change', () => {
+    const preset = presetById(presetEl.value);
+    if (preset) {
+      saveEventPatch({ timePerSlide: preset.timePerSlide, maxSlides: preset.maxSlides });
+    } else {
+      // "Custom" changes nothing by itself: hand over to the field to type in.
+      $('timePerSlide').focus();
+      $('timePerSlide').select();
+    }
+  });
 
   $('displaySelect').addEventListener('change', async (e) => {
     const v = e.target.value;
