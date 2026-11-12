@@ -41,7 +41,18 @@ Under the settings, the summary shows **PDFs Â· slides that will actually play Â
 
 ## Playlist
 
-Each row shows, from left: drag handle, position, first-page thumbnail, file name, and badges:
+Each row shows, from left: drag handle, position, first-page thumbnail, file name, two optional text fields, and badges.
+
+### Presenter and talk title
+
+Under the file name each row has two fields, **Presenter** and **Talk title**. Both are optional. When either is filled in, the player shows it in large type on that deck's Play screen, in place of the file name.
+
+- Click a field and type. **Enter** or clicking elsewhere saves; **Esc** puts back what was there.
+- Empty a field to remove it. Leave both empty and the Play screen shows the file name, as before.
+- When you add a PDF, PK Player fills these in from the PDF's own Title and Author properties if they look like real ones. Placeholders such as "PowerPoint Presentation" or "Microsoft Office User", account-style names such as `jsmith42`, and titles that just repeat the file name are ignored. **Check what was filled in**: it comes from the presenter's software, and it will be on the big screen.
+- Defaults are only applied when a PDF is added. Clearing or changing a field is never undone later.
+
+### Badges
 
 | Badge | Meaning |
 | --- | --- |

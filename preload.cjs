@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('pk', {
   removeItem: (eventId, itemId) => call('items:remove', eventId, itemId),
   reorderItems: (eventId, ids) => call('items:reorder', eventId, ids),
   moveItem: (eventId, itemId, toIndex) => call('items:move', eventId, itemId, toIndex),
+  updateItem: (eventId, itemId, patch) => call('items:update', eventId, itemId, patch),
   setPageCount: (eventId, itemId, n) => call('items:pageCount', eventId, itemId, n),
   getSettings: () => call('settings:get'),
   updateSettings: (patch) => call('settings:update', patch),

@@ -33,7 +33,7 @@ Drag PDF files from Finder / Explorer and drop them anywhere in the window. Whil
 
 Or click **Add PDFs…** (⌘O / Ctrl+O) and pick files. Add all four demo decks.
 
-Each PDF becomes a row in the **Playlist** with a thumbnail of its first page, its page count and how long it will run. PK Player copies every PDF into its own library, so you can move or delete the originals afterwards.
+Each PDF becomes a row in the **Playlist** with a thumbnail of its first page, its page count and how long it will run. The demo decks also arrive with a **Presenter** and **Talk title** already filled in, read from the PDFs; you can edit or empty these two fields, and they are optional. PK Player copies every PDF into its own library, so you can move or delete the originals afterwards.
 
 Notice the fourth row:
 

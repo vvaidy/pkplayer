@@ -3,6 +3,7 @@ import { debug } from '../lib/debug.js';
 import { slidesToPlay } from '../lib/player-controller.js';
 import { CUSTOM_PRESET_ID, PRESETS, presetById, presetIdFor } from '../lib/presets.js';
 import { preflight } from '../lib/preflight.js';
+import { suggestFromMetadata } from '../lib/deck-label.js';
 import { openPdf, renderPage } from './pdf.js';
 
 const pk = window.pk;
@@ -19,7 +20,7 @@ const state = {
   resumeItemId: null,
 };
 
-/** file -> { pageCount, aspect, thumb } once resolved, or { error }. aspect is page 1's width / height. */
+/** file -> { pageCount, aspect, meta, thumb } once resolved, or { error }. aspect is page 1's width / height; meta is the PDF's own { title, author }. */
 const pdfInfo = new Map();
 const pdfInfoPending = new Map();
 
@@ -85,9 +86,14 @@ function loadPdfInfo(file) {
       doc = await openPdf(file);
       const canvas = await renderPage(doc, 1, THUMB_W, THUMB_H, { dpr: 1 });
       const size = (await doc.getPage(1)).getViewport({ scale: 1 });
+      const props = await doc.getMetadata().catch((err) => {
+        debug('editor', `no properties readable in ${file}`, err);
+        return null;
+      });
       const info = {
         pageCount: doc.numPages,
         aspect: size.height > 0 ? size.width / size.height : null,
+        meta: { title: props?.info?.Title, author: props?.info?.Author },
         thumb: canvas.toDataURL('image/jpeg', 0.85),
       };
       pdfInfo.set(file, info);
@@ -270,7 +276,15 @@ function buildRow(ev, it, i, warnings) {
     <div class="handle" aria-hidden="true">⋮⋮</div>
     <div class="index"></div>
     <div class="thumb"></div>
-    <div class="info"><div class="file"></div><div class="detail"></div></div>
+    <div class="info">
+      <div class="file"></div>
+      <div class="who">
+        <input class="who-input presenter" type="text" maxlength="200" spellcheck="false" placeholder="Presenter (optional)" aria-label="Presenter">
+        <span class="who-sep" aria-hidden="true">·</span>
+        <input class="who-input title" type="text" maxlength="200" placeholder="Talk title (optional)" aria-label="Talk title">
+      </div>
+      <div class="detail"></div>
+    </div>
     <div class="row-actions">
       <button class="icon-btn play-here" title="Play from this PDF">▶</button>
       <button class="icon-btn move-up" title="Move up (⌥↑)">↑</button>
@@ -281,6 +295,33 @@ function buildRow(ev, it, i, warnings) {
   li.querySelector('.file').textContent = it.name;
   li.querySelector('.file').title = it.name;
   fillRowInfo(li, ev, it, warnings);
+
+  for (const key of ['presenter', 'title']) {
+    const input = li.querySelector(`.who-input.${key}`);
+    const current = () => selected()?.items.find((x) => x.id === it.id)?.[key] || '';
+    input.value = it[key] || '';
+    // Press-and-drag on a field still drags the row. A plain click (or tabbing in) means
+    // "edit": the row stops being draggable until the field loses focus, so the mouse can select text.
+    let pressing = false;
+    input.addEventListener('pointerdown', () => { pressing = true; });
+    input.addEventListener('focus', () => { if (!pressing) li.draggable = false; });
+    input.addEventListener('click', () => {
+      pressing = false;
+      li.draggable = false;
+    });
+    input.addEventListener('blur', () => {
+      pressing = false;
+      li.draggable = true;
+    });
+    input.addEventListener('change', () => saveItemText(it.id, key, input));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      else if (e.key === 'Escape') {
+        input.value = current();
+        input.blur();
+      }
+    });
+  }
 
   li.querySelector('.play-here').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -325,6 +366,7 @@ function buildRow(ev, it, i, warnings) {
   });
   li.addEventListener('dragend', () => {
     li.classList.remove('dragging');
+    if (li.contains(document.activeElement)) document.activeElement.blur(); // a drag that began on a field is not an edit
     clearDragUi();
   });
   return li;
@@ -424,6 +466,37 @@ async function saveEventPatch(patch, inputEl) {
   }
 }
 
+/**
+ * Give newly added decks a default presenter and talk title from the PDF's own
+ * properties, when those look like real ones. Only ever runs at import, so it
+ * never overwrites what the user typed or brings back a field they cleared.
+ */
+async function applyMetadataDefaults(eventId, added) {
+  await Promise.all(added.map(async (it) => {
+    try {
+      const info = await loadPdfInfo(it.file);
+      const defaults = suggestFromMetadata(info.meta, it.name);
+      if (defaults.presenter || defaults.title) await pk.updateItem(eventId, it.id, defaults);
+    } catch (err) {
+      debug('editor', `could not set defaults for ${it.name}`, err); // the deck is still added, just without defaults
+    }
+  }));
+}
+
+/** Save one of a deck's text fields ("presenter" or "title") from its row input. */
+async function saveItemText(itemId, key, input) {
+  const ev = selected();
+  const it = ev?.items.find((x) => x.id === itemId);
+  if (!it) return;
+  const label = key === 'presenter' ? 'Saving presenter' : 'Saving talk title';
+  const updated = await guarded(label, () => pk.updateItem(ev.id, itemId, { [key]: input.value }));
+  if (updated) {
+    it.presenter = updated.presenter;
+    it.title = updated.title;
+  }
+  if (document.activeElement !== input) input.value = it[key] || '';
+}
+
 async function importFiles(eventId, paths) {
   if (!paths.length) return;
   let targetId = eventId;
@@ -442,6 +515,7 @@ async function importFiles(eventId, paths) {
       toast(`Skipped ${res.rejected.length} file(s):\n${names}`, 'error', 7000);
     }
     if (res.added.length) toast(`Added ${res.added.length} PDF${res.added.length === 1 ? '' : 's'}`, 'ok', 2000);
+    await applyMetadataDefaults(targetId, res.added);
     const ev = await guarded('Reloading event', () => pk.getEvent(targetId));
     if (ev) replaceEvent(ev);
     if (state.selectedId !== targetId) await selectEvent(targetId);

@@ -7,13 +7,16 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 const OUT_DIR = path.resolve(process.argv[2] || 'samples');
 const DECKS = [
   { name: 'alpha-5-slides.pdf', pages: 5, hue: [0.95, 0.35, 0.2] },
-  { name: 'bravo-25-slides.pdf', pages: 25, hue: [0.2, 0.5, 0.9] },
+  // Placeholder properties, as office software writes them: must never be used as a presenter or title.
+  { name: 'bravo-25-slides.pdf', pages: 25, hue: [0.2, 0.5, 0.9], title: 'PowerPoint Presentation', author: 'Microsoft Office User' },
   { name: 'charlie-3-slides.pdf', pages: 3, hue: [0.25, 0.7, 0.4] },
-  { name: 'delta-4x3-4-slides.pdf', pages: 4, hue: [0.6, 0.3, 0.8], pageSize: [1024, 768] },
+  { name: 'delta-4x3-4-slides.pdf', pages: 4, hue: [0.6, 0.3, 0.8], pageSize: [1024, 768], title: 'Delta Talk', author: 'Dana Lee' },
 ];
 
-async function makeDeck({ name, pages, hue, pageSize = [1280, 720] }) {
+async function makeDeck({ name, pages, hue, pageSize = [1280, 720], title, author }) {
   const doc = await PDFDocument.create();
+  if (title) doc.setTitle(title);
+  if (author) doc.setAuthor(author);
   const font = await doc.embedFont(StandardFonts.HelveticaBold);
   const [W, H] = pageSize;
   for (let i = 1; i <= pages; i += 1) {

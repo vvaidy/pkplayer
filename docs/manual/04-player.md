@@ -8,7 +8,7 @@ The player is the fullscreen window your audience sees. It opens on the display 
 
 ![Waiting on the Play button](img/07-player-waiting.png)
 
-Shown before every deck. The deck's first slide is blurred behind a large Play button; the label shows *PDF n of total · file name · slides that will play*. Time does not run here. Start with **Space**, **Enter**, or a click on the button.
+Shown before every deck. The deck's first slide is blurred behind a large Play button; the label shows *PDF n of total · file name · slides that will play*. If the deck has a [presenter or talk title](03-editor.md#presenter-and-talk-title), those appear in large type above the label and the file name is left out. Time does not run here. Start with **Space**, **Enter**, or a click on the button.
 
 ### Playing
 

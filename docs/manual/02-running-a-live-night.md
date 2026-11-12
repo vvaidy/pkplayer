@@ -7,6 +7,7 @@ This walks through a real event: collecting decks, setting up at the venue, runn
 1. Send presenters the [Preparing decks](05-preparing-decks.md) page. The essentials: **a PDF, 16:9, exactly 20 slides, no animations or video.**
 2. As decks arrive, drop them into your event. Check each row:
    - the page count — a yellow **only first 20 play** badge means the deck is too long and its last pages will never show. Tell the presenter now, not at the venue.
+   - the **Presenter** and **Talk title** fields — fill them in or fix what PK Player picked up from the PDF. They go on the big screen before each talk.
    - **only 17 slides** — the deck is short and will end early.
    - **4:3, most are 16:9** — this deck is a different shape from the others and will show black bars.
    - the thumbnail — a red **Unreadable PDF** means the file is broken; ask for a re-export.
@@ -38,7 +39,7 @@ With the real playlist, do a fast run-through:
 
 ## Showtime
 
-1. Select the event and press **Play** (or **F**). The projector shows the first deck on its Play button with the presenter's file name underneath — useful for the MC's introduction.
+1. Select the event and press **Play** (or **F**). The projector shows the first deck on its Play button, with the presenter's name and talk title if you filled them in, or the file name if not — useful for the MC's introduction.
 2. When the presenter is ready, press **Space**. From here, you don't touch anything: slides advance every 20 seconds and the deck ends on its own.
 3. The next deck appears on its Play button and waits. Applause, the next presenter walks up, you press **Space**.
 4. After the last deck: **End of event**. Press **Esc**.

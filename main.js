@@ -232,6 +232,7 @@ function registerIpc() {
   handle('items:remove', (eventId, itemId) => store.removeItem(eventId, itemId));
   handle('items:reorder', (eventId, ids) => store.reorderItems(eventId, ids));
   handle('items:move', (eventId, itemId, toIndex) => store.moveItem(eventId, itemId, toIndex));
+  handle('items:update', (eventId, itemId, patch) => store.updateItem(eventId, itemId, patch));
   handle('items:pageCount', (eventId, itemId, n) => store.setItemPageCount(eventId, itemId, n));
   handle('settings:get', () => store.getSettings());
   handle('settings:update', (patch) => store.updateSettings(patch));

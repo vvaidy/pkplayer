@@ -54,6 +54,15 @@ body.player.idle { cursor: none; }
   70% { box-shadow: 0 0 0 min(5vmin, 40px) rgba(255, 90, 54, 0), 0 20px 60px rgba(0, 0, 0, 0.5); }
   100% { box-shadow: 0 0 0 0 rgba(255, 90, 54, 0), 0 20px 60px rgba(0, 0, 0, 0.5); }
 }
+/* Presenter and talk title, when the organiser has set them. Takes no space when both are empty. */
+.deck-who { display: flex; flex-direction: column; align-items: center; gap: 0.6vmin; max-width: 86vw; text-align: center; }
+.deck-who:not(:has(> :not([hidden]))) { display: none; }
+.deck-presenter, .deck-title {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+}
+.deck-presenter { font: 700 clamp(26px, 6vmin, 72px)/1.15 var(--font); }
+.deck-title { font: 500 clamp(18px, 3.4vmin, 40px)/1.25 var(--font); color: rgba(255, 255, 255, 0.85); }
 .deck-label {
   font: 600 clamp(14px, 2.2vmin, 22px)/1.3 var(--font); color: rgba(255, 255, 255, 0.85);
   background: rgba(0, 0, 0, 0.5); padding: 8px 16px; border-radius: 999px; max-width: 80vw;

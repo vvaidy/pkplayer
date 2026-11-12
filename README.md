@@ -18,7 +18,7 @@
 - **One playlist for the whole night.** Presenters send a PDF. You drop the files in and drag them into order. There are no timings to set up inside each file.
 - **Slides look the way the presenter made them.** A PDF carries its own fonts and layout, so nothing shifts on the event laptop.
 - **Timing that doesn't drift.** Every slide gets exactly its time, measured at ±10 ms per slide.
-- **A clean handover between presenters.** After a deck's last slide, the next deck waits on a Play button. Nothing advances until you press Space.
+- **A clean handover between presenters.** After a deck's last slide, the next deck waits on a Play button showing the presenter's name and talk title. Nothing advances until you press Space.
 - **Problem decks are flagged before the night.** The playlist marks decks that are too long, too short, or a different shape from the others. Pages beyond Max slides are never shown.
 - **Any timed format.** 20 slides × 20 seconds is the default. The **Format** menu switches to Ignite (20 slides × 15 seconds) in one click, or you can set anything from 1 second to an hour per slide.
 
@@ -50,6 +50,7 @@ Then, when you need them:
 - **+ New** creates an Event (defaults: 20 s per slide, 20 max slides). **Format** sets both at once: PechaKucha (20 × 20 s), Ignite (20 × 15 s) or Custom.
 - Drop PDFs onto the playlist (at the drop position), onto an event in the sidebar, or anywhere in the window. With no event selected, dropping creates a new one. You can also use **Add PDFs…** (⌘O).
 - PDFs are copied into the app's library, so moving or deleting the originals is safe (File → Reveal Library Folder).
+- Each row has optional **Presenter** and **Talk title** fields, shown on that deck's Play screen. They are pre-filled from the PDF's Title and Author properties when those look real.
 - To reorder, drag rows, use the ↑/↓ buttons, or press ⌥↑/⌥↓ on a focused row. To remove a row, use ✕ or press Delete.
 - Rows show page count, that deck's run time, and warnings: more pages than Max Slides, fewer pages (PechaKucha and Ignite formats only), or a page shape that differs from most other decks. The summary counts the decks that need a look.
 - **Present on** chooses which display goes fullscreen.
@@ -83,6 +84,7 @@ npm run dist             # build Mac DMG + zip into dist/ (dist:win, dist:linux 
 npm run dist:mac:signed  # same, signed + notarized by Apple (needs the Developer ID setup; see Building & releasing)
 node scripts/make-demo-decks.js          # regenerate samples/demo/ tutorial decks
 node scripts/capture-docs-screens.js     # regenerate manual screenshots — OPENS FULLSCREEN WINDOWS
+PK_DOCS_EDITOR_ONLY=1 node scripts/capture-docs-screens.js   # editor screenshots only: one normal window, nothing fullscreen
 ```
 
 To run the e2e suite against the packaged app, set `PK_E2E_EXECUTABLE="dist/mac-arm64/PK Player.app/Contents/MacOS/PK Player"`.

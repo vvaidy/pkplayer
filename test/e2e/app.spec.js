@@ -216,6 +216,64 @@ test('editor: pre-flight flags short decks and the odd-shaped deck', async () =>
   await app.close();
 });
 
+test('editor: presenter and talk title default from the PDF, can be edited and cleared, and persist', async () => {
+  const { app, editor } = await launch();
+  await editor.click('#newEvent');
+  await editor.fill('#eventName', 'Names Night');
+  await editor.press('#eventName', 'Enter');
+  await stubOpenDialog(app, [fx('alpha-5-slides.pdf'), fx('bravo-25-slides.pdf'), fx('delta-4x3-4-slides.pdf')]);
+  await editor.click('#addPdfs');
+  await expect(editor.locator('.row')).toHaveCount(3);
+  const field = (page, i, key) => page.locator('.row').nth(i).locator(`.who-input.${key}`);
+
+  // Defaults: real properties are used, missing ones and office placeholders are not.
+  await expect(field(editor, 2, 'presenter')).toHaveValue('Dana Lee');
+  await expect(field(editor, 2, 'title')).toHaveValue('Delta Talk');
+  await expect(field(editor, 0, 'presenter')).toHaveValue('');
+  await expect(field(editor, 0, 'title')).toHaveValue('');
+  await expect(field(editor, 1, 'presenter')).toHaveValue('');
+  await expect(field(editor, 1, 'title')).toHaveValue('');
+  await editor.screenshot({ path: path.join(SHOTS, 'editor-names.png') });
+
+  // Typing saves on Enter; Escape puts the saved value back.
+  await field(editor, 0, 'presenter').fill('  Asha   Rao ');
+  await field(editor, 0, 'presenter').press('Enter');
+  await expect(field(editor, 0, 'presenter')).toHaveValue('Asha Rao');
+  await field(editor, 0, 'presenter').fill('Someone Else');
+  await field(editor, 0, 'presenter').press('Escape');
+  await expect(field(editor, 0, 'presenter')).toHaveValue('Asha Rao');
+
+  // Typing in a field must not trigger row shortcuts (Delete removes a row, F plays).
+  await field(editor, 0, 'title').fill('Fx');
+  await field(editor, 0, 'title').press('Backspace');
+  await field(editor, 0, 'title').press('Delete');
+  await field(editor, 0, 'title').press('Enter');
+  await expect(editor.locator('.row')).toHaveCount(3);
+  await expect(field(editor, 0, 'title')).toHaveValue('F');
+  expect(app.windows().length).toBe(1);
+
+  // Clearing a default sticks.
+  await field(editor, 2, 'title').fill('');
+  await field(editor, 2, 'title').press('Enter');
+
+  // A reorder rebuilds the rows: values follow their decks.
+  await editor.locator('.row').first().focus();
+  await editor.keyboard.press('Alt+ArrowDown');
+  expect(await rowNames(editor)).toEqual(['bravo-25-slides.pdf', 'alpha-5-slides.pdf', 'delta-4x3-4-slides.pdf']);
+  await expect(field(editor, 1, 'presenter')).toHaveValue('Asha Rao');
+
+  // Everything persists across a restart, and the cleared default does not come back.
+  await app.close();
+  const { app: app2, editor: editor2 } = await launch();
+  await expect(editor2.locator('.row')).toHaveCount(3);
+  await expect(field(editor2, 1, 'presenter')).toHaveValue('Asha Rao');
+  await expect(field(editor2, 1, 'title')).toHaveValue('F');
+  await expect(field(editor2, 2, 'presenter')).toHaveValue('Dana Lee');
+  await expect(field(editor2, 2, 'title')).toHaveValue('');
+  await expect(field(editor2, 0, 'presenter')).toHaveValue('');
+  await app2.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });
@@ -359,6 +417,30 @@ test('player window is fullscreen on the chosen display', async () => {
   await player.keyboard.press('f');
   await expect.poll(() => app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().find((x) => x.getTitle().includes('Presenting')).isFullScreen()), { timeout: 5000 }).toBe(true);
+  const closed = player.waitForEvent('close');
+  await player.keyboard.press('Escape');
+  await closed;
+  await app.close();
+});
+
+
+test('player: waiting screen shows presenter and talk title when set, file name when not', async () => {
+  const { app, editor } = await launch();
+  await setupEvent(app, editor, { files: [fx('delta-4x3-4-slides.pdf'), fx('alpha-5-slides.pdf')] });
+  await expect(editor.locator('.row').first().locator('.who-input.presenter')).toHaveValue('Dana Lee');
+  const player = await openPlayer(app, editor);
+
+  await expect(player.locator('#deckPresenter')).toHaveText('Dana Lee');
+  await expect(player.locator('#deckTitle')).toHaveText('Delta Talk');
+  await expect(player.locator('#deckLabel')).toHaveText('PDF 1 of 2 · 4 slides');
+  await player.screenshot({ path: path.join(SHOTS, 'player-waiting-names.png') });
+
+  await player.keyboard.press('n');
+  await expect(player.locator('#deckLabel')).toHaveText('PDF 2 of 2 · alpha-5-slides.pdf · 4 slides');
+  await expect(player.locator('#deckPresenter')).toBeHidden();
+  await expect(player.locator('#deckTitle')).toBeHidden();
+  await expect(player.locator('.deck-who')).toBeHidden();
+
   const closed = player.waitForEvent('close');
   await player.keyboard.press('Escape');
   await closed;

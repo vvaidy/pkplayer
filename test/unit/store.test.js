@@ -132,6 +132,65 @@ test('setItemPageCount stores counts and validates', () => {
   assert.throws(() => s.setItemPageCount(ev.id, added[0].id, -1), StoreError);
 });
 
+test('new decks have an empty presenter and title', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  assert.equal(added[0].presenter, '');
+  assert.equal(added[0].title, '');
+});
+
+test('updateItem stores presenter and title, tidies them, and persists', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  const id = added[0].id;
+  const it = s.updateItem(ev.id, id, { presenter: '  Asha   Rao ', title: 'Tiny\nGardens' });
+  assert.equal(it.presenter, 'Asha Rao');
+  assert.equal(it.title, 'Tiny Gardens');
+  // One field at a time leaves the other alone; "" and null clear.
+  assert.equal(s.updateItem(ev.id, id, { title: 'New title' }).presenter, 'Asha Rao');
+  assert.equal(s.updateItem(ev.id, id, { presenter: '' }).presenter, '');
+  assert.equal(s.updateItem(ev.id, id, { title: null }).title, '');
+  s.updateItem(ev.id, id, { presenter: 'Marek', title: 'Night Trains' });
+  const again = new Store(dir).getEvent(ev.id).items[0];
+  assert.deepEqual([again.presenter, again.title, again.name], ['Marek', 'Night Trains', 'a.pdf']);
+  assert.equal(s.updateItem(ev.id, id, { presenter: 'x'.repeat(500) }).presenter.length, 200);
+});
+
+test('updateItem ignores other fields and rejects bad input', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  const id = added[0].id;
+  const it = s.updateItem(ev.id, id, { name: 'hacked.pdf', file: '../../etc/passwd', pageCount: 99 });
+  assert.deepEqual([it.name, it.file, it.pageCount], ['a.pdf', added[0].file, null]);
+  assert.equal(s.updateItem(ev.id, id).presenter, '');
+  assert.throws(() => s.updateItem(ev.id, id, { presenter: 42 }), StoreError);
+  assert.throws(() => s.updateItem(ev.id, id, { title: { a: 1 } }), StoreError);
+  assert.throws(() => s.updateItem(ev.id, 'nope', { title: 'x' }), StoreError);
+  assert.throws(() => s.updateItem('nope', id, { title: 'x' }), StoreError);
+});
+
+test('events saved by an older version load with empty presenter and title', () => {
+  fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify({
+    version: 1,
+    settings: { displayId: null },
+    events: [{ id: 'e1', name: 'Old', timePerSlide: 20, maxSlides: 20, items: [{ id: 'i1', name: 'a.pdf', file: 'a.pdf', pageCount: 20 }] }],
+  }), { encoding: 'utf-8' });
+  const it = new Store(dir).getEvent('e1').items[0];
+  assert.deepEqual([it.presenter, it.title, it.name, it.pageCount], ['', '', 'a.pdf', 20]);
+});
+
+test('duplicateEvent copies presenter and title', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  s.updateItem(ev.id, added[0].id, { presenter: 'Asha', title: 'Tiny Gardens' });
+  const copy = s.duplicateEvent(ev.id).items[0];
+  assert.deepEqual([copy.presenter, copy.title], ['Asha', 'Tiny Gardens']);
+});
+
 test('settings persist', () => {
   const s = new Store(dir);
   assert.deepEqual(s.getSettings(), { displayId: null });

@@ -118,6 +118,19 @@
 .thumb .err { color: var(--danger); font-size: 11px; text-align: center; padding: 4px; }
 .info { min-width: 0; }
 .info .file { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Presenter and talk title: each field is as wide as its text (or its placeholder) and grows as you type. */
+.info .who { display: flex; align-items: center; gap: 2px; margin-top: 4px; min-width: 0; }
+.who-input {
+  field-sizing: content; flex: 0 1 auto; min-width: 3ch; max-width: 100%;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text); font: inherit; font-size: 12px; padding: 2px 6px; margin-left: -7px; outline: none;
+  text-overflow: ellipsis; transition: border-color 0.12s, background 0.12s;
+}
+.who-sep { flex: none; color: #5b6270; font-size: 12px; }
+.who-sep + .who-input { margin-left: 0; }
+.who-input::placeholder { color: #5b6270; }
+.who-input:hover { border-color: var(--border); }
+.who-input:focus { border-color: var(--accent); background: var(--bg); }
 .info .detail { font-size: 12px; color: var(--text-dim); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
 .badge { padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--bg-elev-2); }
 .badge.warn { background: rgba(245, 185, 72, 0.16); color: var(--warn); }

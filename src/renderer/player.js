@@ -2,6 +2,7 @@
 // every `timePerSlide` seconds with a discreet progress bar.
 import { debug } from '../lib/debug.js';
 import { PHASE, PlayerController } from '../lib/player-controller.js';
+import { deckLabel } from '../lib/deck-label.js';
 import { openPdf, renderPage } from './pdf.js';
 
 const pk = window.pk;
@@ -88,7 +89,12 @@ function updateUi() {
 
   if (v.phase === PHASE.WAITING) {
     const it = ev.items[v.deckIndex];
-    $('deckLabel').textContent = `PDF ${v.deckIndex + 1} of ${ev.items.length} · ${it.name} · ${v.slideCount} slide${v.slideCount === 1 ? '' : 's'}`;
+    const label = deckLabel(it, v.deckIndex, ev.items.length, v.slideCount);
+    $('deckPresenter').textContent = label.presenter;
+    $('deckPresenter').hidden = !label.presenter;
+    $('deckTitle').textContent = label.title;
+    $('deckTitle').hidden = !label.title;
+    $('deckLabel').textContent = label.meta;
     $('bigPlay').focus();
   }
   if (active) $('counter').textContent = `${v.slideIndex + 1} / ${v.slideCount}`;

@@ -31,6 +31,11 @@ function clampNumber(value, { min, max }, label, { integer = false } = {}) {
   return n;
 }
 
+/** Optional one-line text (presenter, talk title): trimmed, capped, "" when absent. */
+function cleanText(value) {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, LIMITS.nameLength) : '';
+}
+
 function cleanName(name, fallback) {
   const s = String(name ?? '').trim().slice(0, LIMITS.nameLength);
   return s || fallback;
@@ -81,6 +86,8 @@ export class Store {
             name: cleanName(it.name, 'Untitled.pdf'),
             file: path.basename(String(it.file)),
             pageCount: Number.isInteger(it.pageCount) ? it.pageCount : null,
+            presenter: cleanText(it.presenter), // absent in files written before 1.1
+            title: cleanText(it.title),
           })),
         createdAt: e.createdAt || new Date().toISOString(),
       }));
@@ -208,7 +215,7 @@ export class Store {
         const id = newId();
         const file = `${id}.pdf`;
         fs.copyFileSync(p, this.libraryPath(file));
-        added.push({ id, name: cleanName(path.basename(p), 'Untitled.pdf'), file, pageCount: null });
+        added.push({ id, name: cleanName(path.basename(p), 'Untitled.pdf'), file, pageCount: null, presenter: '', title: '' });
         debug('store', `imported ${p} -> ${file}`);
       } catch (err) {
         debug('store', `failed to import ${p}`, err);
@@ -254,6 +261,30 @@ export class Store {
     ids.splice(from, 1);
     ids.splice(Math.max(0, Math.min(toIndex, ids.length)), 0, itemId);
     return this.reorderItems(eventId, ids);
+  }
+
+  /**
+   * Set a deck's presenter name and/or talk title. Both are optional text; "" clears one.
+   * Anything else in the patch is ignored.
+   */
+  updateItem(eventId, itemId, patch = {}) {
+    const ev = this.#event(eventId);
+    const it = ev.items.find((x) => x.id === itemId);
+    if (!it) throw new StoreError(`Playlist item not found: ${itemId}`);
+    let changed = false;
+    for (const key of ['presenter', 'title']) {
+      if (!(key in (patch || {}))) continue;
+      if (patch[key] != null && typeof patch[key] !== 'string') {
+        throw new StoreError(`${key === 'presenter' ? 'Presenter' : 'Talk title'} must be text`);
+      }
+      const value = cleanText(patch[key]);
+      if (it[key] !== value) {
+        it[key] = value;
+        changed = true;
+      }
+    }
+    if (changed) this.#save();
+    return this.#clone(it);
   }
 
   setItemPageCount(eventId, itemId, pageCount) {
