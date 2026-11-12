@@ -193,11 +193,33 @@ test('duplicateEvent copies presenter and title', () => {
 
 test('settings persist', () => {
   const s = new Store(dir);
-  assert.deepEqual(s.getSettings(), { displayId: null });
+  assert.deepEqual(s.getSettings(), { displayId: null, theme: 'midnight-teal' });
   s.updateSettings({ displayId: '12345' });
   assert.equal(new Store(dir).getSettings().displayId, 12345);
   s.updateSettings({ displayId: null });
   assert.equal(new Store(dir).getSettings().displayId, null);
+});
+
+test('theme setting persists, rejects unknown themes and leaves the display alone', () => {
+  const s = new Store(dir);
+  s.updateSettings({ displayId: '7' });
+  assert.equal(s.updateSettings({ theme: 'blueprint' }).theme, 'blueprint');
+  assert.deepEqual(new Store(dir).getSettings(), { displayId: 7, theme: 'blueprint' });
+  assert.throws(() => s.updateSettings({ theme: 'no-such-theme' }), StoreError);
+  assert.throws(() => s.updateSettings({ theme: null }), StoreError);
+  assert.equal(new Store(dir).getSettings().theme, 'blueprint');
+  assert.equal(s.updateSettings({ displayId: null }).theme, 'blueprint');
+});
+
+test('settings saved before themes existed, or naming a removed theme, load with the default theme', () => {
+  const write = (settings) => fs.writeFileSync(path.join(dir, 'events.json'),
+    JSON.stringify({ version: 1, settings, events: [] }), { encoding: 'utf-8' });
+  write({ displayId: 3 });
+  assert.deepEqual(new Store(dir).getSettings(), { displayId: 3, theme: 'midnight-teal' });
+  write({ displayId: null, theme: 'gone-in-a-later-version' });
+  assert.equal(new Store(dir).getSettings().theme, 'midnight-teal');
+  write({ displayId: null, theme: 'vibe-with-claude' });
+  assert.equal(new Store(dir).getSettings().theme, 'vibe-with-claude');
 });
 
 test('corrupt events.json is backed up, not lost', () => {

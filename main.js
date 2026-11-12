@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './src/main/store.js';
 import { buildHelpMenu } from './src/main/help-menu.js';
+import { themeById, themeVars } from './src/lib/themes.js';
 import { debug } from './src/lib/debug.js';
 
 // ---------- app parameters ----------
@@ -98,6 +99,11 @@ const secureWebPrefs = {
   nodeIntegration: false,
 };
 
+/** The chosen theme's window background, so a window never flashes another color while it loads. */
+function themeBackground() {
+  return themeVars(themeById(store.getSettings().theme))['--bg'];
+}
+
 function createEditorWindow() {
   editorWin = new BrowserWindow({
     width: 1100,
@@ -105,11 +111,11 @@ function createEditorWindow() {
     minWidth: 760,
     minHeight: 520,
     title: 'PK Player',
-    backgroundColor: '#14161a',
+    backgroundColor: themeBackground(),
     show: false,
     webPreferences: secureWebPrefs,
   });
-  editorWin.loadURL(`${EDITOR_URL}?${DEBUG_QUERY}`);
+  editorWin.loadURL(`${EDITOR_URL}?theme=${encodeURIComponent(store.getSettings().theme)}${DEBUG_QUERY}`);
   editorWin.once('ready-to-show', () => editorWin.show());
   editorWin.on('closed', () => {
     editorWin = null;
@@ -145,7 +151,7 @@ async function openPlayer(eventId, startItemId) {
   });
   playerWin = win;
   playerSession = session;
-  const q = new URLSearchParams({ event: eventId });
+  const q = new URLSearchParams({ event: eventId, theme: store.getSettings().theme });
   if (startItemId) q.set('start', startItemId);
   win.loadURL(`${PLAYER_URL}?${q}${DEBUG_QUERY}`);
   win.once('ready-to-show', () => {
@@ -235,7 +241,11 @@ function registerIpc() {
   handle('items:update', (eventId, itemId, patch) => store.updateItem(eventId, itemId, patch));
   handle('items:pageCount', (eventId, itemId, n) => store.setItemPageCount(eventId, itemId, n));
   handle('settings:get', () => store.getSettings());
-  handle('settings:update', (patch) => store.updateSettings(patch));
+  handle('settings:update', (patch) => {
+    const settings = store.updateSettings(patch);
+    if (patch && 'theme' in patch && editorWin) editorWin.setBackgroundColor(themeBackground());
+    return settings;
+  });
   handle('displays:list', () => listDisplays());
   handle('resume:get', (eventId) => resumePoints.get(eventId) || null);
   handle('resume:clear', (eventId) => resumePoints.delete(eventId));

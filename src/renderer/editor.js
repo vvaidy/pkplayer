@@ -5,6 +5,8 @@ import { CUSTOM_PRESET_ID, PRESETS, presetById, presetIdFor } from '../lib/prese
 import { preflight } from '../lib/preflight.js';
 import { suggestFromMetadata } from '../lib/deck-label.js';
 import { openPdf, renderPage } from './pdf.js';
+import { applyTheme } from './theme.js';
+import { THEMES, themeById } from '../lib/themes.js';
 
 const pk = window.pk;
 const $ = (id) => document.getElementById(id);
@@ -16,7 +18,7 @@ const state = {
   events: [],
   selectedId: null,
   displays: [],
-  settings: { displayId: null },
+  settings: { displayId: null, theme: null },
   resumeItemId: null,
 };
 
@@ -703,6 +705,11 @@ function setupDragAndDrop() {
 
 // ---------- displays ----------
 
+/** Show the saved theme: colors on the page and the choice in the Theme menu. */
+function renderTheme() {
+  $('themeSelect').value = applyTheme(themeById(state.settings.theme).id).id;
+}
+
 function renderDisplays() {
   const sel = $('displaySelect');
   const opts = [new Option('Main display (automatic)', '')];
@@ -764,6 +771,19 @@ function wireControls() {
     }
   });
 
+  const themeEl = $('themeSelect');
+  for (const [label, mode] of [['Dark', 'dark'], ['Light', 'light']]) {
+    const group = document.createElement('optgroup');
+    group.label = label;
+    for (const t of THEMES.filter((x) => x.mode === mode)) group.append(new Option(t.name, t.id));
+    themeEl.append(group);
+  }
+  themeEl.addEventListener('change', async () => {
+    const s = await guarded('Saving theme', () => pk.updateSettings({ theme: themeEl.value }));
+    if (s) state.settings = s;
+    renderTheme();
+  });
+
   $('displaySelect').addEventListener('change', async (e) => {
     const v = e.target.value;
     const s = await guarded('Saving display', () => pk.updateSettings({ displayId: v === '' ? null : v }));
@@ -801,6 +821,7 @@ async function init() {
   if (settings) state.settings = settings;
   state.displays = displays || [];
   renderDisplays();
+  renderTheme();
   await refreshEvents();
   await selectEvent(state.selectedId);
   document.body.dataset.ready = '1';

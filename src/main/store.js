@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { debug } from '../lib/debug.js';
 import { DEFAULT_MAX_SLIDES, DEFAULT_TIME_PER_SLIDE } from '../lib/player-controller.js';
+import { DEFAULT_THEME_ID, isThemeId } from '../lib/themes.js';
 
 export const SCHEMA_VERSION = 1;
 export const LIMITS = Object.freeze({
@@ -20,7 +21,7 @@ export class StoreError extends Error {}
 const newId = () => crypto.randomUUID();
 
 function emptyData() {
-  return { version: SCHEMA_VERSION, settings: { displayId: null }, events: [] };
+  return { version: SCHEMA_VERSION, settings: { displayId: null, theme: DEFAULT_THEME_ID }, events: [] };
 }
 
 function clampNumber(value, { min, max }, label, { integer = false } = {}) {
@@ -74,6 +75,8 @@ export class Store {
       const raw = JSON.parse(fs.readFileSync(this.file, { encoding: 'utf-8' }));
       const data = emptyData();
       data.settings = { ...data.settings, ...(raw.settings || {}) };
+      // Files from before themes existed have no theme; an unknown id (a theme removed later) also falls back.
+      if (!isThemeId(data.settings.theme)) data.settings.theme = DEFAULT_THEME_ID;
       data.events = (Array.isArray(raw.events) ? raw.events : []).map((e) => ({
         id: String(e.id || newId()),
         name: cleanName(e.name, 'Untitled Event'),
@@ -328,6 +331,10 @@ export class Store {
     if ('displayId' in patch) {
       const v = patch.displayId;
       this.data.settings.displayId = v === null || v === '' ? null : Number(v);
+    }
+    if ('theme' in patch) {
+      if (!isThemeId(patch.theme)) throw new StoreError(`Unknown theme: ${patch.theme}`);
+      this.data.settings.theme = patch.theme;
     }
     this.#save();
     return this.getSettings();

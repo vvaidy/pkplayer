@@ -38,7 +38,7 @@ body.player.idle { cursor: none; }
 .big-play {
   appearance: none; border: 0; cursor: pointer;
   width: min(28vmin, 260px); height: min(28vmin, 260px); border-radius: 50%;
-  background: rgba(255, 90, 54, 0.92); box-shadow: 0 0 0 0 rgba(255, 90, 54, 0.5), 0 20px 60px rgba(0, 0, 0, 0.5);
+  background: color-mix(in srgb, var(--accent) 92%, transparent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent), 0 20px 60px rgba(0, 0, 0, 0.5);
   display: grid; place-items: center; animation: ring 2s ease-out infinite; transition: transform 0.12s;
 }
 .big-play:hover { transform: scale(1.04); }
@@ -46,13 +46,13 @@ body.player.idle { cursor: none; }
 .big-play:focus { outline: none; }
 .big-play .tri {
   width: 0; height: 0; margin-left: 9%;
-  border-left: min(9vmin, 84px) solid #fff;
+  border-left: min(9vmin, 84px) solid var(--on-accent);
   border-top: min(5.4vmin, 50px) solid transparent; border-bottom: min(5.4vmin, 50px) solid transparent;
 }
 @keyframes ring {
-  0% { box-shadow: 0 0 0 0 rgba(255, 90, 54, 0.45), 0 20px 60px rgba(0, 0, 0, 0.5); }
-  70% { box-shadow: 0 0 0 min(5vmin, 40px) rgba(255, 90, 54, 0), 0 20px 60px rgba(0, 0, 0, 0.5); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 90, 54, 0), 0 20px 60px rgba(0, 0, 0, 0.5); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent), 0 20px 60px rgba(0, 0, 0, 0.5); }
+  70% { box-shadow: 0 0 0 min(5vmin, 40px) color-mix(in srgb, var(--accent) 0%, transparent), 0 20px 60px rgba(0, 0, 0, 0.5); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent), 0 20px 60px rgba(0, 0, 0, 0.5); }
 }
 /* Presenter and talk title, when the organiser has set them. Takes no space when both are empty. */
 .deck-who { display: flex; flex-direction: column; align-items: center; gap: 0.6vmin; max-width: 86vw; text-align: center; }

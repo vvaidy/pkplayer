@@ -100,3 +100,23 @@ The resume point is kept until you quit the app.
 ## Present on
 
 The **Present on** menu at the bottom of the sidebar chooses which display the player fills. It lists every connected display with its name and resolution, and updates when you plug or unplug one. The choice is saved; if that display is missing at play time, the main display is used.
+
+## Theme
+
+The **Theme** menu under Present on changes PK Player's colors. The choice is saved and applies to the editor and to the player's own controls: the Play button, its glow, and anything else PK Player draws. Your slides are never tinted.
+
+| Dark | Light |
+| --- | --- |
+| Midnight Teal (the default) | Paper |
+| Blueprint | Sage |
+| Aubergine | Blossom |
+| Forest | |
+| Lagoon | |
+| Graphite | |
+| Projector (high contrast) | |
+| Vibe with Claude | |
+
+- **Vibe with Claude** is the original look of PK Player up to version 1.0.2, kept exactly.
+- **Projector** is black and white with one bright accent, for washed-out projectors and bright rooms.
+- Every theme was made for PK Player. None is taken from another project's color scheme.
+- The yellow and red badges described above use each theme's own warning and error colors, so their exact shade varies.

@@ -274,6 +274,53 @@ test('editor: presenter and talk title default from the PDF, can be edited and c
   await app2.close();
 });
 
+test('editor: Theme menu recolors the window, lists the library, and persists', async () => {
+  const { app, editor } = await launch();
+  const cssVar = (page, name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+  const windowBg = (a) => a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor().toLowerCase());
+
+  // A fresh install starts on the default theme, with no orange anywhere.
+  await expect(editor.locator('#themeSelect')).toHaveValue('midnight-teal');
+  expect(await cssVar(editor, '--accent')).toBe('#2dd4bf');
+  expect(await windowBg(app)).toBe('#0e1519');
+  await expect(editor.locator('#themeSelect option')).toHaveCount(11);
+  await expect(editor.locator('#themeSelect optgroup')).toHaveCount(2);
+
+  await editor.click('#newEvent');
+  await editor.fill('#eventName', 'Theme Night');
+  await editor.press('#eventName', 'Enter');
+  await stubOpenDialog(app, [fx('alpha-5-slides.pdf'), fx('bravo-25-slides.pdf'), fx('delta-4x3-4-slides.pdf')]);
+  await editor.click('#addPdfs');
+  await expect(editor.locator('.row')).toHaveCount(3);
+  await editor.locator('.toast').first().waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
+
+  // The old look is still there, exactly.
+  await editor.selectOption('#themeSelect', 'vibe-with-claude');
+  expect(await cssVar(editor, '--accent')).toBe('#ff5a36');
+  expect(await cssVar(editor, '--bg')).toBe('#14161a');
+  expect(await windowBg(app)).toBe('#14161a');
+  await expect(editor.locator('#playBtn')).toHaveCSS('background-color', 'rgb(255, 90, 54)');
+
+  // Every theme applies and sets the page's light/dark mode.
+  for (const id of ['midnight-teal', 'blueprint', 'graphite', 'projector', 'sage', 'paper']) {
+    await editor.selectOption('#themeSelect', id);
+    await expect(editor.locator('html')).toHaveAttribute('data-theme', id);
+    await editor.waitForTimeout(300); // let the 0.12 s color transitions finish before the picture
+    await editor.screenshot({ path: path.join(SHOTS, `theme-${id}.png`) });
+  }
+  expect(await editor.evaluate(() => document.documentElement.style.colorScheme)).toBe('light');
+  await expect(editor.locator('body')).toHaveCSS('background-color', 'rgb(246, 244, 238)');
+  await expect(editor.locator('#playBtn')).toHaveCSS('background-color', 'rgb(47, 91, 234)');
+
+  // The choice survives a restart, and the window opens in the right color.
+  await app.close();
+  const { app: app2, editor: editor2 } = await launch();
+  await expect(editor2.locator('#themeSelect')).toHaveValue('paper');
+  await expect(editor2.locator('html')).toHaveAttribute('data-theme', 'paper');
+  expect(await windowBg(app2)).toBe('#f6f4ee');
+  await app2.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });
@@ -428,7 +475,12 @@ test('player: waiting screen shows presenter and talk title when set, file name 
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('delta-4x3-4-slides.pdf'), fx('alpha-5-slides.pdf')] });
   await expect(editor.locator('.row').first().locator('.who-input.presenter')).toHaveValue('Dana Lee');
+  await editor.selectOption('#themeSelect', 'blueprint');
   const player = await openPlayer(app, editor);
+
+  // The player picks up the chosen theme for its own controls.
+  await expect(player.locator('html')).toHaveAttribute('data-theme', 'blueprint');
+  expect(await player.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())).toBe('#5aa9ff');
 
   await expect(player.locator('#deckPresenter')).toHaveText('Dana Lee');
   await expect(player.locator('#deckTitle')).toHaveText('Delta Talk');
