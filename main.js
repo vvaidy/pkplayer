@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './src/main/store.js';
+import { buildHelpMenu } from './src/main/help-menu.js';
 import { debug } from './src/lib/debug.js';
 
 // ---------- app parameters ----------
@@ -280,6 +281,7 @@ function buildMenu() {
       submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }],
     },
     { role: 'windowMenu' },
+    buildHelpMenu((url) => shell.openExternal(url)),
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
