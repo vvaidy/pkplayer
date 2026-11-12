@@ -10,7 +10,7 @@ The first time, you'll see an empty window:
 
 ![Empty editor](img/01-empty.png)
 
-If macOS or Windows refuses to open the app, see [Installing PK Player](06-installing.md#first-launch-warnings) — the app is not code-signed yet, so the operating system asks you to confirm once.
+If macOS or Windows asks before opening the app the first time, see [First-launch warnings](06-installing.md#first-launch-warnings). The Mac version is signed by Apple and opens after one click; the Windows version is unsigned and needs **More info** → **Run anyway** once.
 
 ## 2. Create an event
 

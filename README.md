@@ -2,11 +2,18 @@
 
 PechaKucha PDF player. Build an **Event** (time per slide, max slides, playlist of PDFs), hit **Play**, and each deck runs fullscreen on a fixed timer.
 
+> [!CAUTION]
+> ## ⚠️ NO WARRANTY — USE ENTIRELY AT YOUR OWN RISK
+> **PK PLAYER IS FREE SOFTWARE PROVIDED "AS IS", WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. THE AUTHOR ACCEPTS NO RESPONSIBILITY OR LIABILITY FOR ANYTHING THAT GOES WRONG WHEN YOU USE IT — INCLUDING A FAILED OR DISRUPTED EVENT, LOST OR DAMAGED FILES, OR ANY OTHER LOSS OR DAMAGE. BY USING PK PLAYER YOU ACCEPT ALL OF THE RISK.** See the [LICENSE](LICENSE) (MIT).
+
+> [!WARNING]
+> **Only tested on one Mac.** PK Player has been run and tested only on a Mac with Apple silicon (M4 Max) running macOS 26.6.2 (Tahoe). The Intel Mac, Windows and Linux versions are built automatically but have **never been run or tested**. They may not work at all.
+
 **📖 [User manual](docs/manual/README.md)** — tutorials, reference, troubleshooting, and how to build and release.
 
 ## Install / run
 
-- Installers: `npm run dist` (Mac), `npm run dist:win`, `npm run dist:linux` → `dist/PK-Player-<version>-<os>-<arch>.<ext>`, or let GitHub Actions build all three (see [Building & releasing](docs/manual/08-building-and-releasing.md)). Builds are unsigned; see [first-launch warnings](docs/manual/06-installing.md#first-launch-warnings).
+- Installers: `npm run dist` (Mac), `npm run dist:win`, `npm run dist:linux` → `dist/PK-Player-<version>-<os>-<arch>.<ext>`, or let GitHub Actions build all three (see [Building & releasing](docs/manual/08-building-and-releasing.md)). Mac release builds are signed and notarized, in CI or locally with `npm run dist:mac:signed`; Windows and Linux builds are unsigned. See [first-launch warnings](docs/manual/06-installing.md#first-launch-warnings).
 - From source: `npm install`, then `npm start`.
 
 ## Editor
@@ -39,6 +46,7 @@ npm test                 # unit tests (headless)
 npm run test:e2e         # Electron end-to-end tests — OPENS FULLSCREEN WINDOWS on your displays
 npm run fixtures         # regenerate samples/ test PDFs
 npm run dist             # build Mac DMG + zip into dist/ (dist:win, dist:linux also work from a Mac)
+npm run dist:mac:signed  # same, signed + notarized by Apple (needs the Developer ID setup; see Building & releasing)
 node scripts/make-demo-decks.js          # regenerate samples/demo/ tutorial decks
 node scripts/capture-docs-screens.js     # regenerate manual screenshots — OPENS FULLSCREEN WINDOWS
 ```
@@ -47,3 +55,7 @@ To run the e2e suite against the packaged app, set `PK_E2E_EXECUTABLE="dist/mac-
 Debug logging: `PKPLAY_DEBUG=1 npm start`. Use `PKPLAY_DATA_DIR=/some/dir` for an isolated data folder.
 
 Layout: `main.js` (main process, `app://` protocol, IPC), `preload.cjs` (bridge), `src/main/store.js` (persistence), `src/lib/player-controller.js` (pure timing state machine), `src/renderer/` (editor + player UI, pdf.js).
+
+## License
+
+MIT. See [LICENSE](LICENSE). **No warranty: you use PK Player entirely at your own risk.**

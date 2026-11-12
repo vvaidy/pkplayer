@@ -6,13 +6,14 @@
   "type": "module",
   "main": "main.js",
   "author": "Vijay",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "test": "node --test \"test/unit/*.test.js\"",
     "test:e2e": "playwright test",
     "fixtures": "node scripts/make-fixtures.js",
     "dist": "electron-builder --mac",
+    "dist:mac:signed": "APPLE_KEYCHAIN_PROFILE=pkplayer-notary electron-builder --mac",
     "dist:dir": "electron-builder --mac dir",
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux"

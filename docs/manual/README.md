@@ -2,6 +2,13 @@
 
 PK Player runs PechaKucha nights from PDF files. You build an **Event** — a playlist of presenters' decks — and PK Player shows each deck fullscreen, advancing every slide on a fixed timer, and stopping on a big Play button between presenters.
 
+> [!CAUTION]
+> ## ⚠️ NO WARRANTY — USE ENTIRELY AT YOUR OWN RISK
+> **PK PLAYER IS FREE SOFTWARE PROVIDED "AS IS", WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. THE AUTHOR ACCEPTS NO RESPONSIBILITY OR LIABILITY FOR ANYTHING THAT GOES WRONG WHEN YOU USE IT — INCLUDING A FAILED OR DISRUPTED EVENT, LOST OR DAMAGED FILES, OR ANY OTHER LOSS OR DAMAGE. BY USING PK PLAYER YOU ACCEPT ALL OF THE RISK.** See the [LICENSE](../../LICENSE) (MIT).
+
+> [!WARNING]
+> **Only tested on one Mac.** PK Player has been run and tested only on a Mac with Apple silicon (M4 Max) running macOS 26.6.2 (Tahoe). The Intel Mac, Windows and Linux versions are built automatically but have **never been run or tested**. They may not work at all.
+
 ![The PK Player editor with a four-deck event](img/02-event.png)
 
 ## Start here

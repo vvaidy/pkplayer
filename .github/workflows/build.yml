@@ -9,7 +9,10 @@
 #   npm version 1.2.0          # bumps package.json, commits, tags v1.2.0
 #   git push --follow-tags
 #
-# Builds are unsigned. See docs/manual/06-installing.md for what users see.
+# Mac builds from tags (and manual runs with "sign" ticked) are signed with the
+# Developer ID certificate and notarized by Apple, using these repository secrets:
+#   CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+# Ordinary pushes build the Mac app unsigned (faster). Windows and Linux are unsigned.
 
 name: build
 
@@ -19,6 +22,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      sign:
+        description: Sign and notarize the Mac build
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -57,8 +65,7 @@ jobs:
             build: npm run dist:linux -- --x64 --publish never
             files: dist/*.AppImage
     runs-on: ${{ matrix.os }}
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # unsigned builds; remove when you add certificates
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -74,7 +81,43 @@ jobs:
           if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
             echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version $v"; exit 1
           fi
-      - run: ${{ matrix.build }}
+      - name: Install Apple's Developer ID intermediate certificate
+        if: matrix.os == 'macos-latest' && (startsWith(github.ref, 'refs/tags/v') || inputs.sign)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          sudo security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k /Library/Keychains/System.keychain || true
+      - name: Build installers
+        shell: bash
+        env:
+          SIGN: ${{ matrix.os == 'macos-latest' && (startsWith(github.ref, 'refs/tags/v') || inputs.sign) }}
+          S_CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+          S_CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+          S_APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          S_APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          S_APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          if [ "$SIGN" = "true" ]; then
+            for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+              v="S_$name"
+              if [ -z "${!v}" ]; then echo "::error::Repository secret $name is not set; cannot sign the Mac build"; exit 1; fi
+              export "$name=${!v}"
+            done
+            echo "Signing and notarizing the Mac build"
+          else
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "Building unsigned"
+          fi
+          unset S_CSC_LINK S_CSC_KEY_PASSWORD S_APPLE_ID S_APPLE_APP_SPECIFIC_PASSWORD S_APPLE_TEAM_ID
+          ${{ matrix.build }}
+      - name: Verify Mac signature and notarization
+        if: matrix.os == 'macos-latest' && (startsWith(github.ref, 'refs/tags/v') || inputs.sign)
+        run: |
+          for app in "dist/mac-arm64/PK Player.app" "dist/mac/PK Player.app"; do
+            codesign --verify --deep --strict "$app"
+            spctl -a -vvv -t exec "$app" 2>&1 | tee "$RUNNER_TEMP/spctl.txt"
+            grep -q "source=Notarized Developer ID" "$RUNNER_TEMP/spctl.txt"
+            xcrun stapler validate "$app"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: pk-player-${{ runner.os }}

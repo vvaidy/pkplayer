@@ -11,6 +11,9 @@ PK Player runs on macOS, Windows and Linux. Pick the file for your computer from
 
 Not sure which Mac you have?  → About This Mac: *Chip: Apple M…* means Apple silicon; *Processor: Intel…* means Intel.
 
+> [!WARNING]
+> **Only tested on one Mac.** PK Player has been run and tested only on a Mac with Apple silicon (M4 Max) running macOS 26.6.2 (Tahoe). The Intel Mac, Windows and Linux versions are built automatically but have **never been run or tested**. They may not work at all.
+
 ## macOS
 
 1. Open the `.dmg`.
@@ -32,22 +35,21 @@ On Ubuntu 22.04 and later, AppImages need FUSE 2: `sudo apt install libfuse2` (`
 
 ## First-launch warnings
 
-PK Player isn't code-signed yet, so each operating system asks you to confirm the first time. This is a one-time step.
+**macOS:** the Mac versions are signed with an Apple Developer ID and notarized by Apple, so PK Player opens like any other app. The first time, macOS asks *"PK Player" is an app downloaded from the internet. Are you sure you want to open it?* Click **Open**.
 
-**macOS 15 Sequoia and later**
+If macOS instead says it *could not verify* PK Player, or that it *is damaged and can't be opened*, you have an unsigned copy, such as one built from source. Download the current release, or let it run:
 
-1. Open PK Player. macOS says it can't verify the app. Click **Done**.
-2. Open System Settings → **Privacy & Security**, scroll down to *"PK Player" was blocked…*, and click **Open Anyway**. Confirm with your password.
+- **macOS 15 Sequoia and later:** open PK Player and click **Done**. Then go to System Settings → **Privacy & Security**, scroll down to *"PK Player" was blocked…*, click **Open Anyway**, and confirm with your password.
+- **macOS 14 and earlier:** right-click (Control-click) PK Player in Applications → **Open** → **Open**.
+- **"Damaged":** the app isn't damaged. In Terminal, run:
 
-**macOS 14 and earlier:** right-click (Control-click) PK Player in Applications → **Open** → **Open**.
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/PK Player.app"
+  ```
 
-**"PK Player is damaged and can't be opened"** — macOS shows this for unsigned apps downloaded from the internet. The app is not damaged. In Terminal, run:
+**Windows:** the Windows version isn't code-signed, so SmartScreen shows *Windows protected your PC* the first time. Click **More info** → **Run anyway**.
 
-```bash
-xattr -dr com.apple.quarantine "/Applications/PK Player.app"
-```
-
-**Windows:** SmartScreen shows *Windows protected your PC*. Click **More info** → **Run anyway**.
+**Linux:** no warning.
 
 ## Where your data lives
 

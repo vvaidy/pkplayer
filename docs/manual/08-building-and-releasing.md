@@ -37,11 +37,12 @@ PK_E2E_EXECUTABLE="dist/mac-arm64/PK Player.app/Contents/MacOS/PK Player" npm ru
 
 ```bash
 npm run dist          # macOS: arm64 + x64 .dmg, arm64 .zip
+npm run dist:mac:signed   # the same, signed and notarized (see Code signing below)
 npm run dist:win      # Windows: x64 NSIS .exe   (works from a Mac, no Wine needed)
 npm run dist:linux    # Linux: x86_64 .AppImage  (works from a Mac)
 ```
 
-Output goes to `dist/`, named `PK-Player-<version>-<os>-<arch>.<ext>`. Set `CSC_IDENTITY_AUTO_DISCOVERY=false` to stop electron-builder looking for a signing certificate in your keychain.
+Output goes to `dist/`, named `PK-Player-<version>-<os>-<arch>.<ext>`. If a Developer ID certificate is in your keychain, `npm run dist` signs with it automatically but does not notarize. Set `CSC_IDENTITY_AUTO_DISCOVERY=false` for an unsigned build.
 
 ## Build and release with GitHub Actions
 
@@ -49,9 +50,9 @@ Output goes to `dist/`, named `PK-Player-<version>-<os>-<arch>.<ext>`. Set `CSC_
 
 | Trigger | What happens |
 | --- | --- |
-| Push to `main`, or a pull request | Unit tests, then installers for all three platforms. Download them from the run page → **Artifacts** (kept 14 days). |
-| Push a tag `v1.2.3` | Same, then a **draft** GitHub Release named *PK Player 1.2.3* with all installers attached and auto-generated notes. |
-| Actions tab → build → **Run workflow** | Manual run of the above for any branch. |
+| Push to `main`, or a pull request | Unit tests, then installers for all three platforms. Download them from the run page → **Artifacts** (kept 14 days). The Mac build is unsigned, to keep these runs quick. |
+| Push a tag `v1.2.3` | Same, but the Mac build is **signed and notarized**. Then a **draft** GitHub Release named *PK Player 1.2.3* is created with all installers attached and auto-generated notes. |
+| Actions tab → build → **Run workflow** | Manual run for any branch. Tick **Sign and notarize the Mac build** to get a signed Mac app. |
 
 ### One-time setup
 
@@ -59,7 +60,7 @@ Output goes to `dist/`, named `PK-Player-<version>-<os>-<arch>.<ext>`. Set `CSC_
 gh repo create pkplayer --private --source . --push
 ```
 
-(or create the repository on github.com, `git remote add origin …`, `git push -u origin main --tags`). No secrets are needed for unsigned builds.
+(or create the repository on github.com, `git remote add origin …`, `git push -u origin main --tags`). Signed Mac builds also need the repository secrets described under [Code signing](#code-signing).
 
 ### Cutting a release
 
@@ -70,12 +71,53 @@ git push --follow-tags
 
 The workflow refuses to release if the tag doesn't match `package.json`'s version. When it finishes, open the repository's **Releases**, review the draft, and click **Publish**. Share the release page link with users; [Installing PK Player](06-installing.md) tells them which file to pick.
 
-## Code signing (optional, later)
+## Code signing
 
-Unsigned builds work but trigger the first-launch warnings described in [Installing](06-installing.md#first-launch-warnings). To remove them:
+### macOS
 
-- **macOS** — an Apple Developer ID (Apple Developer Program, USD 99/year). Add repository secrets `CSC_LINK` (base64 .p12 of the *Developer ID Application* certificate), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`; set `"notarize": true` under `build.mac` in `package.json`; and remove `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` from the workflow.
-- **Windows** — an OV/EV code-signing certificate or Azure Trusted Signing; electron-builder supports both via `build.win` options and secrets.
+Mac release builds are signed as *Developer ID Application: Vijay Vaidyanathan (PE2UT44344)* and notarized by Apple, so they open without Gatekeeper warnings.
+
+**In GitHub Actions** (how releases are built), signing uses five repository secrets:
+
+| Secret | Value |
+| --- | --- |
+| `CSC_LINK` | The Developer ID Application certificate and private key, exported as a .p12 and base64-encoded |
+| `CSC_KEY_PASSWORD` | The password chosen when exporting the .p12 |
+| `APPLE_ID` | The Apple ID of the developer account |
+| `APPLE_APP_SPECIFIC_PASSWORD` | An app-specific password for that Apple ID, from account.apple.com |
+| `APPLE_TEAM_ID` | `PE2UT44344` |
+
+To set or replace them, export the certificate from Keychain Access (login → My Certificates → right-click *Developer ID Application: …* → Export → .p12), then run:
+
+```bash
+base64 -i ~/Desktop/pkplayer-devid.p12 | gh secret set CSC_LINK --repo vvaidy/pkplayer
+gh secret set CSC_KEY_PASSWORD --repo vvaidy/pkplayer
+gh secret set APPLE_APP_SPECIFIC_PASSWORD --repo vvaidy/pkplayer
+```
+
+Each `gh secret set` without a value prompts for it. Delete the exported .p12 afterwards, or keep it somewhere safe as your backup.
+
+If a secret is missing, a tag build fails rather than producing an unsigned Mac release. After signing, the workflow checks the app with `spctl` and `stapler`, and fails if either check fails.
+
+**On your own Mac:** run `npm run dist:mac:signed`. This needs two things in the login keychain:
+
+- The Developer ID Application certificate and its private key. `security find-identity -v -p codesigning` should list it.
+- A notarytool profile named `pkplayer-notary`, made once with `xcrun notarytool store-credentials pkplayer-notary --apple-id YOUR_APPLE_ID --team-id PE2UT44344`.
+
+To check a build:
+
+```bash
+spctl -a -vvv -t exec "dist/mac-arm64/PK Player.app"   # expect: source=Notarized Developer ID
+xcrun stapler validate "dist/mac-arm64/PK Player.app"  # expect: The validate action worked!
+```
+
+Notarization uploads each app to Apple and waits for approval: about 4 minutes per architecture, sometimes longer.
+
+**Renewal:** the certificate expires on 2027-12-12. Before then, create a new one at developer.apple.com → Certificates, Identifiers & Profiles, then update `CSC_LINK` and `CSC_KEY_PASSWORD`. Apps signed before it expires keep working. The Apple Developer Program membership itself renews yearly.
+
+### Windows
+
+The Windows build is unsigned, so SmartScreen warns on first launch. Signing it needs an OV/EV code-signing certificate or Azure Trusted Signing; electron-builder supports both through `build.win` options and secrets.
 
 ## Project layout
 
