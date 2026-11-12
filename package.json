@@ -1,7 +1,7 @@
 {
   "name": "pkplaypdf",
   "productName": "PK Player",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "PechaKucha PDF player: timed, fullscreen playback of PDF playlists",
   "type": "module",
   "main": "main.js",
