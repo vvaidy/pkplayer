@@ -23,6 +23,10 @@ Send this page to your presenters.
 
 Then open the PDF and check: one page per slide, 20 pages, nothing missing.
 
+## Rehearsing
+
+If you have PK Player yourself, **File → Practice a PDF…** plays your PDF with the real 20-second timer, fullscreen, without setting anything up. Press **Space** to start and **Esc** to stop. See [Practice a PDF](03-editor.md#practice-a-pdf).
+
 ## Why each rule matters
 
 **Builds and animations.** A PDF has no animation. Exporting "each stage of builds" turns one animated slide into several pages, which pushes your real slides past page 20 — and those get cut. Design each slide as a single still.

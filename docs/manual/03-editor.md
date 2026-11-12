@@ -97,6 +97,15 @@ Added PDFs are **copied** into PK Player's library, so the originals can be move
 
 The resume point is kept until you quit the app.
 
+## Practice a PDF
+
+**File → Practice a PDF…** (⇧⌘P / Ctrl+Shift+P) plays a single PDF with the timer, without creating an event. It is meant for a presenter rehearsing their own talk. The first screen of a fresh install has a **Practice a PDF…** button too.
+
+- Pick a PDF. The player opens on its Play button, exactly as it would on the night, and all the [player keys](04-player.md#keys) work.
+- **Timing:** if an event is selected, practice uses that event's Time per slide and Max slides. With no event selected it uses 20 seconds and 20 slides.
+- **Nothing is saved.** No event is created, nothing is added to your playlists, and PK Player's working copy of the PDF is removed when you press Esc. Your own file is never changed.
+- To rehearse again, choose Practice a PDF… again.
+
 ## Present on
 
 The **Present on** menu at the bottom of the sidebar chooses which display the player fills. It lists every connected display with its name and resolution, and updates when you plug or unplug one. The choice is saved; if that display is missing at play time, the main display is used.

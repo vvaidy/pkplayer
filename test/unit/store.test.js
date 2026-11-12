@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Store, StoreError, isPdfFile } from '../../src/main/store.js';
+import { PRACTICE_EVENT_ID, Store, StoreError, isPdfFile } from '../../src/main/store.js';
 
 let dir;
 let src;
@@ -305,6 +305,80 @@ test('custom themes: damaged entries in the file are dropped, good ones kept, an
   const s = new Store(dir);
   assert.deepEqual(s.listThemes().map((t) => t.name), ['Good']);
   assert.equal(s.getSettings().theme, 'midnight-teal');
+});
+
+test('practice: a one-deck event that is never listed and never saved', () => {
+  const s = new Store(dir);
+  const real = s.createEvent('Real night');
+  const ev = s.startPractice(fakePdf('my talk.pdf'));
+  assert.equal(ev.id, PRACTICE_EVENT_ID);
+  assert.equal(ev.practice, true);
+  assert.deepEqual([ev.timePerSlide, ev.maxSlides, ev.items.length, ev.items[0].name], [20, 20, 1, 'my talk.pdf']);
+  assert.match(ev.items[0].file, /^practice-[0-9a-f-]+\.pdf$/);
+  assert.ok(fs.existsSync(path.join(dir, 'library', ev.items[0].file)));
+  // The player can read it and record its page count...
+  assert.equal(s.getEvent(PRACTICE_EVENT_ID).name, 'Practice: my talk.pdf');
+  assert.equal(s.setItemPageCount(PRACTICE_EVENT_ID, ev.items[0].id, 17).pageCount, 17);
+  // ...but it is not an event anywhere else.
+  assert.deepEqual(s.listEvents().map((e) => e.id), [real.id]);
+  assert.ok(!fs.readFileSync(path.join(dir, 'events.json'), 'utf-8').includes('practice'));
+  assert.deepEqual(new Store(dir).listEvents().map((e) => e.id), [real.id]);
+});
+
+test('practice: uses the timing it is given, and falls back to 20 x 20 for anything invalid', () => {
+  const s = new Store(dir);
+  const pdf = fakePdf('a.pdf');
+  assert.deepEqual((({ timePerSlide, maxSlides }) => [timePerSlide, maxSlides])(s.startPractice(pdf, { timePerSlide: 15, maxSlides: 12 })), [15, 12]);
+  for (const bad of [{ timePerSlide: 0, maxSlides: 0 }, { timePerSlide: 'x', maxSlides: 2.5 }, { timePerSlide: 99999, maxSlides: -1 }, {}, undefined]) {
+    const ev = s.startPractice(pdf, bad);
+    assert.deepEqual([ev.timePerSlide, ev.maxSlides], [20, 20], JSON.stringify(bad));
+  }
+});
+
+test('practice: cannot be edited, duplicated or deleted like a real event', () => {
+  const s = new Store(dir);
+  s.startPractice(fakePdf('a.pdf'));
+  assert.throws(() => s.updateEvent(PRACTICE_EVENT_ID, { name: 'x' }), StoreError);
+  assert.throws(() => s.duplicateEvent(PRACTICE_EVENT_ID), StoreError);
+  assert.throws(() => s.deleteEvent(PRACTICE_EVENT_ID), StoreError);
+  assert.throws(() => s.addPdfs(PRACTICE_EVENT_ID, [fakePdf('b.pdf')]), StoreError);
+  assert.equal(s.listEvents().length, 0);
+});
+
+test('practice: ending it removes its copy of the PDF and leaves real decks alone', () => {
+  const s = new Store(dir);
+  const real = s.createEvent('E');
+  s.addPdfs(real.id, [fakePdf('keep.pdf')]);
+  const first = s.startPractice(fakePdf('one.pdf'));
+  // Library cleanup triggered by ordinary edits must not remove the deck being practised.
+  s.gcLibrary();
+  assert.ok(fs.existsSync(path.join(dir, 'library', first.items[0].file)));
+  // A new practice replaces the old one and removes the old copy.
+  const second = s.startPractice(fakePdf('two.pdf'));
+  assert.ok(!fs.existsSync(path.join(dir, 'library', first.items[0].file)));
+  // A late "closed" from the first practice must not end the second.
+  assert.equal(s.endPractice(first.items[0].id), false);
+  assert.equal(s.getEvent(PRACTICE_EVENT_ID).items[0].name, 'two.pdf');
+  assert.equal(s.endPractice(second.items[0].id), true);
+  assert.throws(() => s.getEvent(PRACTICE_EVENT_ID), StoreError);
+  assert.equal(s.endPractice(), false);
+  assert.equal(libFiles().length, 1); // only keep.pdf's copy
+  assert.equal(s.getEvent(real.id).items.length, 1);
+});
+
+test('practice: rejects missing files and non-PDFs, and cleans up after a crash', () => {
+  const s = new Store(dir);
+  assert.throws(() => s.startPractice(path.join(src, 'nope.pdf')), /File not found/);
+  const txt = path.join(src, 'notes.pdf');
+  fs.writeFileSync(txt, 'not a pdf', { encoding: 'utf-8' });
+  assert.throws(() => s.startPractice(txt), /Not a PDF/);
+  assert.throws(() => s.startPractice(''), /File not found/);
+  assert.throws(() => s.getEvent(PRACTICE_EVENT_ID), StoreError);
+  // The app is closed mid-practice: the next start removes the leftover copy.
+  s.startPractice(fakePdf('a.pdf'));
+  assert.equal(libFiles().length, 1);
+  new Store(dir);
+  assert.equal(libFiles().length, 0);
 });
 
 test('corrupt events.json is backed up, not lost', () => {

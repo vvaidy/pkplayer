@@ -4,7 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, powerSaveBlocker, protocol, 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Store } from './src/main/store.js';
+import { PRACTICE_EVENT_ID, Store } from './src/main/store.js';
 import { buildHelpMenu } from './src/main/help-menu.js';
 import { exportTheme, isCustomThemeId, parseThemeFile, themeVars } from './src/lib/themes.js';
 import { debug } from './src/lib/debug.js';
@@ -150,6 +150,8 @@ async function openPlayer(eventId, startItemId) {
   debug('player', `opening event ${eventId} on display ${display.id} (${width}x${height})`);
 
   const session = { eventId, itemId: startItemId || null };
+  // Which practice deck this window is showing, so closing it ends that practice and no other.
+  if (eventId === PRACTICE_EVENT_ID) session.practiceToken = store.getEvent(eventId).items[0].id;
   const win = new BrowserWindow({
     x,
     y,
@@ -179,7 +181,10 @@ async function openPlayer(eventId, startItemId) {
   if (sleepBlockerId === null) sleepBlockerId = powerSaveBlocker.start('prevent-display-sleep');
 
   win.on('closed', () => {
-    if (session.itemId) resumePoints.set(session.eventId, session.itemId);
+    if (session.eventId === PRACTICE_EVENT_ID) {
+      resumePoints.delete(session.eventId); // practice never resumes
+      store.endPractice(session.practiceToken); // and leaves nothing behind
+    } else if (session.itemId) resumePoints.set(session.eventId, session.itemId);
     else resumePoints.delete(session.eventId);
     if (playerWin !== win) return; // a newer player already replaced this one
     playerWin = null;
@@ -313,6 +318,25 @@ function registerIpc() {
     return res.canceled ? [] : res.filePaths;
   });
   handle('player:open', (eventId, startItemId) => openPlayer(eventId, startItemId));
+  // Practice: pick one PDF and play it with the timer, without creating or saving an event.
+  // Returns the file's name, or null if the file dialog was cancelled.
+  handle('practice:start', async (opts) => {
+    const res = await dialog.showOpenDialog(editorWin, {
+      title: 'Practice a PDF',
+      properties: ['openFile'],
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (res.canceled || !res.filePaths.length) return null;
+    await closePlayer(); // ends any practice already running before the new one is set up
+    const ev = store.startPractice(res.filePaths[0], opts || {});
+    try {
+      await openPlayer(ev.id);
+    } catch (err) {
+      store.endPractice(ev.items[0].id);
+      throw err;
+    }
+    return ev.items[0].name;
+  });
   handle('player:close', () => closePlayer());
   handle('player:fullscreen', () => {
     if (playerWin && !playerWin.isFullScreen()) playerWin.setFullScreen(true);
@@ -335,6 +359,8 @@ function buildMenu() {
       submenu: [
         { label: 'New Event', accelerator: 'CmdOrCtrl+N', click: () => editorWin?.webContents.send('menu:newEvent') },
         { label: 'Add PDFs…', accelerator: 'CmdOrCtrl+O', click: () => editorWin?.webContents.send('menu:addPdfs') },
+        { type: 'separator' },
+        { label: 'Practice a PDF…', accelerator: 'CmdOrCtrl+Shift+P', click: () => editorWin?.webContents.send('menu:practice') },
         { type: 'separator' },
         { label: 'Reveal Library Folder', click: () => shell.openPath(store.libraryDir) },
         { type: 'separator' },

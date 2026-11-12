@@ -20,6 +20,7 @@
 - **Timing that doesn't drift.** Every slide gets exactly its time, measured at ±10 ms per slide.
 - **A clean handover between presenters.** After a deck's last slide, the next deck waits on a Play button showing the presenter's name and talk title. Nothing advances until you press Space.
 - **Problem decks are flagged before the night.** The playlist marks decks that are too long, too short, or a different shape from the others. Pages beyond Max slides are never shown.
+- **Presenters can rehearse.** Practice a PDF plays a single deck with the real timer, without creating an event or saving anything.
 - **Any timed format.** 20 slides × 20 seconds is the default. The **Format** menu switches to Ignite (20 slides × 15 seconds) in one click, or you can set anything from 1 second to an hour per slide.
 
 ![A deck waiting on its Play button](docs/manual/img/07-player-waiting.png)
@@ -56,6 +57,7 @@ Then, when you need them:
 - **Present on** chooses which display goes fullscreen.
 - **Theme** picks from 11 color themes, dark and light, all made for PK Player. It colors the editor and the player's own controls, never your slides. "Vibe with Claude" is the original look. **Customize…** makes your own theme from six colors with a live preview; **Import…** reads a PK Player, Ghostty or iTerm2 theme file.
 - Play options: **Play** (or **F**), ▶ on a row to start from that PDF, or Enter on a focused row.
+- **File → Practice a PDF…** (⇧⌘P) plays one PDF with the timer and saves nothing. It uses the selected event's timing, or 20 × 20 when no event is selected.
 
 ## Player keys
 

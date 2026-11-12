@@ -491,6 +491,29 @@ test('editor: import a terminal theme file, export it, and import it back; bad f
   }
 });
 
+test('editor: Practice a PDF is offered on the first screen, and cancelling it changes nothing', async () => {
+  const { app, editor } = await launch();
+  await expect(editor.locator('#emptyPractice')).toBeVisible();
+  const menuLabels = await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items.map((x) => x.label) : [])));
+  expect(menuLabels).toContain('Practice a PDF…');
+
+  await app.evaluate(({ dialog }) => { dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] }); });
+  await editor.click('#emptyPractice');
+  await editor.waitForTimeout(400);
+  expect(app.windows().length).toBe(1);
+  await expect(editor.locator('.toast.error')).toHaveCount(0);
+  await expect(editor.locator('.event-item')).toHaveCount(0);
+  expect(fs.readdirSync(path.join(dataDir, 'library'))).toEqual([]);
+
+  // A file that is not a PDF is refused with a message, and still nothing is opened or kept.
+  await stubOpenDialog(app, [fx('not-a-pdf.pdf')]);
+  await editor.click('#emptyPractice');
+  await expect(editor.locator('.toast.error').last()).toContainText('Not a PDF file');
+  expect(app.windows().length).toBe(1);
+  expect(fs.readdirSync(path.join(dataDir, 'library'))).toEqual([]);
+  await app.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });
@@ -678,5 +701,48 @@ test('player: waiting screen shows presenter and talk title when set, file name 
   const closed = player.waitForEvent('close');
   await player.keyboard.press('Escape');
   await closed;
+  await app.close();
+});
+
+test('practice: plays one PDF with the timer, saves nothing, and uses the selected event\'s timing', async () => {
+  const { app, editor } = await launch();
+  const practiceFiles = () => fs.readdirSync(path.join(dataDir, 'library')).filter((f) => f.startsWith('practice-'));
+  const closePlayer = async (player) => {
+    const closed = player.waitForEvent('close');
+    await player.keyboard.press('Escape');
+    await closed;
+  };
+
+  // From the first screen, with no events at all: PechaKucha timing, capped at the deck's own 5 pages.
+  await stubOpenDialog(app, [fx('alpha-5-slides.pdf')]);
+  let player = await openPlayer(app, editor, () => editor.click('#emptyPractice'));
+  await expect(player.locator('#deckLabel')).toHaveText('PDF 1 of 1 · alpha-5-slides.pdf · 5 slides');
+  expect(practiceFiles().length).toBe(1);
+  await expect(editor.locator('.event-item')).toHaveCount(0);
+  await player.keyboard.press('n'); // skip the only deck
+  await expect(player.locator('#ended')).toBeVisible();
+  await expect(player.locator('.ended-title')).toHaveText('End of practice');
+  await closePlayer(player);
+
+  // Nothing is left behind: no event, no copy of the PDF, no resume point.
+  await expect.poll(practiceFiles).toEqual([]);
+  expect(fs.readdirSync(path.join(dataDir, 'library'))).toEqual([]);
+  await expect(editor.locator('.event-item')).toHaveCount(0);
+  await expect(editor.locator('#emptyState')).toBeVisible();
+
+  // From the File menu with an event selected: that event's timing is used, and the event is untouched.
+  await setupEvent(app, editor, { time: '1', max: '3', files: [fx('charlie-3-slides.pdf')] });
+  await stubOpenDialog(app, [fx('bravo-25-slides.pdf')]);
+  player = await openPlayer(app, editor, () => app.evaluate(({ Menu }) => {
+    Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === 'Practice a PDF…').click();
+  }));
+  await expect(player.locator('#deckLabel')).toHaveText('PDF 1 of 1 · bravo-25-slides.pdf · 3 slides');
+  await player.keyboard.press('Space');
+  await expect(player.locator('body')).toHaveAttribute('data-slide', '1', { timeout: 3000 }); // 1 s per slide, from the event
+  await closePlayer(player);
+  await expect.poll(practiceFiles).toEqual([]);
+  await expect(editor.locator('.event-item')).toHaveCount(1);
+  expect(await rowNames(editor)).toEqual(['charlie-3-slides.pdf']);
+  await expect(editor.locator('#playFromStart')).toBeHidden(); // stopping practice mid-deck sets no resume point
   await app.close();
 });

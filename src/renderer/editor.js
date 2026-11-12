@@ -608,6 +608,16 @@ async function play(startItemId) {
   await guarded('Opening player', () => pk.openPlayer(ev.id, start));
 }
 
+/**
+ * Practice: pick one PDF and play it with the timer, without creating an event.
+ * It uses the selected event's timing when there is one, otherwise 20 x 20.
+ */
+async function practice() {
+  const ev = selected();
+  const opts = ev ? { timePerSlide: ev.timePerSlide, maxSlides: ev.maxSlides } : {};
+  await guarded('Starting practice', () => pk.practice(opts));
+}
+
 // ---------- drag & drop ----------
 
 let dropIndexForImport;
@@ -892,6 +902,7 @@ function renderDisplays() {
 function wireControls() {
   $('newEvent').addEventListener('click', () => newEvent());
   $('emptyNew').addEventListener('click', () => newEvent());
+  $('emptyPractice').addEventListener('click', () => practice());
   $('addPdfs').addEventListener('click', addPdfsViaDialog);
   $('dropHint').addEventListener('click', addPdfsViaDialog);
   $('deleteEvent').addEventListener('click', deleteSelectedEvent);
@@ -959,6 +970,7 @@ function wireControls() {
   });
 
   pk.onMenu('newEvent', () => newEvent());
+  pk.onMenu('practice', () => practice());
   pk.onMenu('addPdfs', () => (selected() ? addPdfsViaDialog() : toast('Create or select an event first.')));
   pk.onPlayerClosed(async ({ eventId }) => {
     await refreshEvents();

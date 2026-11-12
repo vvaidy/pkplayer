@@ -10,6 +10,9 @@ import { DEFAULT_MAX_SLIDES, DEFAULT_TIME_PER_SLIDE } from '../lib/player-contro
 import { CUSTOM_THEME_PREFIX, DEFAULT_THEME_ID, THEMES, isThemeId, normalizeTheme, themeById } from '../lib/themes.js';
 
 export const SCHEMA_VERSION = 1;
+/** Id of the one-deck event that Practice plays. It is never listed and never saved. */
+export const PRACTICE_EVENT_ID = 'practice';
+const PRACTICE_FILE_PREFIX = 'practice-';
 export const LIMITS = Object.freeze({
   timePerSlide: { min: 0.5, max: 3600 },
   maxSlides: { min: 1, max: 999 },
@@ -66,6 +69,8 @@ export class Store {
     this.file = path.join(dataDir, 'events.json');
     fs.mkdirSync(this.libraryDir, { recursive: true });
     this.data = this.#load();
+    this.practice = null;
+    this.#removePracticeFiles(); // left behind if the app was closed mid-practice
   }
 
   // ---------- persistence ----------
@@ -132,7 +137,9 @@ export class Store {
     }
   }
 
-  #event(id) {
+  /** Look up an event. The practice deck is only visible to the few callers that ask for it. */
+  #event(id, { allowPractice = false } = {}) {
+    if (allowPractice && id === PRACTICE_EVENT_ID && this.practice) return this.practice;
     const ev = this.data.events.find((e) => e.id === id);
     if (!ev) throw new StoreError(`Event not found: ${id}`);
     return ev;
@@ -153,7 +160,7 @@ export class Store {
   }
 
   getEvent(id) {
-    return this.#clone(this.#event(id));
+    return this.#clone(this.#event(id, { allowPractice: true }));
   }
 
   createEvent(name) {
@@ -303,7 +310,7 @@ export class Store {
   }
 
   setItemPageCount(eventId, itemId, pageCount) {
-    const ev = this.#event(eventId);
+    const ev = this.#event(eventId, { allowPractice: true });
     const it = ev.items.find((x) => x.id === itemId);
     if (!it) throw new StoreError(`Playlist item not found: ${itemId}`);
     const n = Number(pageCount);
@@ -318,6 +325,7 @@ export class Store {
   /** Delete library files that no event references any more. Returns the number removed. */
   gcLibrary() {
     const used = new Set(this.data.events.flatMap((e) => e.items.map((it) => it.file)));
+    for (const it of this.practice?.items || []) used.add(it.file);
     let removed = 0;
     try {
       for (const f of fs.readdirSync(this.libraryDir)) {
@@ -331,6 +339,65 @@ export class Store {
     }
     if (removed) debug('store', `library cleanup removed ${removed} file(s)`);
     return removed;
+  }
+
+  // ---------- practice ----------
+
+  #removePracticeFiles(except) {
+    try {
+      for (const f of fs.readdirSync(this.libraryDir)) {
+        if (f.startsWith(PRACTICE_FILE_PREFIX) && f !== except) fs.rmSync(path.join(this.libraryDir, f), { force: true });
+      }
+    } catch (err) {
+      debug('store', 'could not clean up practice files', err);
+    }
+  }
+
+  /**
+   * Set up a one-deck event for practising a single PDF. Nothing about it is
+   * saved: it is not in the event list, not in events.json, and its copy of the
+   * PDF is removed when practice ends. Starting a new practice replaces the old one.
+   * Settings that are missing or out of range fall back to the 20 x 20 defaults.
+   * @returns {object} the practice event (id PRACTICE_EVENT_ID, one item)
+   */
+  startPractice(filePath, { timePerSlide, maxSlides } = {}) {
+    if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) throw new StoreError('File not found');
+    if (!isPdfFile(filePath)) throw new StoreError('Not a PDF file');
+    const inRange = (v, { min, max }) => Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max;
+    const id = newId();
+    const file = `${PRACTICE_FILE_PREFIX}${id}.pdf`;
+    try {
+      fs.copyFileSync(filePath, this.libraryPath(file));
+    } catch (err) {
+      debug('store', `could not copy ${filePath} for practice`, err);
+      throw new StoreError(`Could not open the PDF: ${err.message}`);
+    }
+    const name = cleanName(path.basename(filePath), 'Untitled.pdf');
+    this.practice = {
+      id: PRACTICE_EVENT_ID,
+      practice: true,
+      name: `Practice: ${name}`,
+      timePerSlide: inRange(timePerSlide, LIMITS.timePerSlide) ? Number(timePerSlide) : DEFAULT_TIME_PER_SLIDE,
+      maxSlides: inRange(maxSlides, LIMITS.maxSlides) && Number.isInteger(Number(maxSlides)) ? Number(maxSlides) : DEFAULT_MAX_SLIDES,
+      items: [{ id, name, file, pageCount: null, presenter: '', title: '' }],
+      createdAt: new Date().toISOString(),
+    };
+    this.#removePracticeFiles(file); // the previous practice deck, if any
+    debug('store', `practice: ${filePath} -> ${file}`);
+    return this.#clone(this.practice);
+  }
+
+  /**
+   * End practice and remove its copy of the PDF. With `token` (the practice
+   * item's id), only that practice is ended, so a late "player closed" for an
+   * older practice cannot end a newer one. Returns true if something was ended.
+   */
+  endPractice(token) {
+    if (!this.practice) return false;
+    if (token !== undefined && this.practice.items[0].id !== token) return false;
+    this.practice = null;
+    this.#removePracticeFiles();
+    return true;
   }
 
   // ---------- themes ----------

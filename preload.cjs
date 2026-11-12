@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('pk', {
   clearResume: (eventId) => call('resume:clear', eventId),
   pickPdfs: () => call('dialog:openPdfs'),
   openPlayer: (eventId, startItemId) => call('player:open', eventId, startItemId),
+  practice: (opts) => call('practice:start', opts),
   closePlayer: () => call('player:close'),
   enterFullscreen: () => call('player:fullscreen'),
   reportPosition: (itemId) => call('player:position', itemId),

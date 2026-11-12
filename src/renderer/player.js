@@ -227,6 +227,7 @@ async function init() {
   setupResize();
 
   ev = await pk.getEvent(EVENT_ID);
+  if (ev.practice) document.querySelector('.ended-title').textContent = 'End of practice';
   $('loadingText').textContent = `Loading ${ev.items.length} PDF${ev.items.length === 1 ? '' : 's'}…`;
   const results = await Promise.allSettled(ev.items.map((it) => openPdf(it.file)));
   docs = results.map((r) => (r.status === 'fulfilled' ? r.value : null));

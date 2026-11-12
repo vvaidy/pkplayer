@@ -191,3 +191,7 @@
 .theme-buttons { display: flex; gap: 6px; align-items: center; margin-top: 14px; }
 .theme-buttons .spacer { flex: 1; }
 
+/* ---------- practice ---------- */
+.empty-practice { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
+.empty-practice p { margin: 10px 0 0; }
+
