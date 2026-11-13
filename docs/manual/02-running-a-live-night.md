@@ -32,6 +32,8 @@ PK Player keeps the screen from sleeping while the player is open. Still, plug t
 
 ## Do a dry run
 
+For a quick check that every deck opens and every slide draws, use **Speedrun test…** above the playlist: it runs the whole event at 10× and reports any problem. See [Speedrun test](03-editor.md#speedrun-test). It does not replace the real dry run below.
+
 With the real playlist, do a fast run-through:
 
 - Play, press **Space**, tap **→** a few times to see slides render properly, then **N** to the next deck. Repeat through the whole playlist. This catches unreadable PDFs and odd aspect ratios before the audience does.

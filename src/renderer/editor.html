@@ -75,6 +75,7 @@
         <div class="playlist-head">
           <h2>Playlist</h2>
           <span class="muted small">Drag to reorder · Delete removes · Enter plays from that PDF</span>
+          <button id="speedrunOpen" class="btn btn-sm btn-ghost" title="Play every slide of every deck fast, to check that everything loads and displays">Speedrun test…</button>
           <button id="addPdfs" class="btn btn-sm">Add PDFs…</button>
         </div>
         <ol id="playlist" class="playlist" aria-label="Playlist"></ol>
@@ -89,6 +90,19 @@
       <div id="busy" class="busy" hidden><div class="spinner"></div><div id="busyText">Importing…</div></div>
     </main>
   </div>
+  <dialog id="speedDialog" class="speed-dialog" aria-labelledby="speedDialogTitle">
+    <form id="speedForm" method="dialog">
+      <h2 id="speedDialogTitle">Speedrun test</h2>
+      <p>Plays every slide of every deck in this event, fast and fullscreen, to check that everything loads and displays. Each deck starts by itself.</p>
+      <p class="speed-warning"><strong>This is a test, not a real run.</strong> The speed applies to this one run only. Play always runs at normal speed.</p>
+      <div id="speedChoices" class="speed-choices" role="radiogroup" aria-label="Speed"></div>
+      <div class="theme-buttons">
+        <span class="spacer"></span>
+        <button type="button" id="speedCancel" class="btn btn-sm" autofocus>Cancel</button>
+        <button type="submit" id="speedStart" class="btn btn-sm btn-primary">Start test</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="themeDialog" class="theme-dialog" aria-labelledby="themeDialogTitle">
     <form id="themeForm" method="dialog" novalidate>
       <h2 id="themeDialogTitle">Customize theme</h2>

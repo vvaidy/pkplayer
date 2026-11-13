@@ -514,6 +514,72 @@ test('editor: Practice a PDF is offered on the first screen, and cancelling it c
   await app.close();
 });
 
+test('editor: Speedrun test asks first, offers only 5×, 10× and 20×, and cannot start by accident', async () => {
+  const { app, editor } = await launch();
+  const dialog = editor.locator('#speedDialog');
+
+  // The menu item exists and has no keyboard shortcut.
+  const item = await app.evaluate(({ Menu }) => {
+    const found = Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === 'Speedrun Test…');
+    return found ? { accelerator: found.accelerator || null } : null;
+  });
+  expect(item).toEqual({ accelerator: null });
+
+  // With nothing to play there is nothing to test.
+  await editor.click('#newEvent');
+  await editor.fill('#eventName', 'Speed Night');
+  await editor.press('#eventName', 'Enter');
+  await editor.click('#speedrunOpen');
+  await expect(editor.locator('.toast').last()).toContainText('Add at least one PDF');
+  await expect(dialog).toBeHidden();
+
+  await stubOpenDialog(app, [fx('alpha-5-slides.pdf'), fx('bravo-25-slides.pdf')]);
+  await editor.click('#addPdfs');
+  await expect(editor.locator('.row')).toHaveCount(2);
+  await expect(editor.locator('.row').nth(1)).toContainText('25 pages');
+
+  // The dialog says what it is, offers exactly three speeds, and starts on 10×.
+  await editor.click('#speedrunOpen');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('This is a test, not a real run.');
+  await expect(editor.locator('#speedChoices .speed-name')).toHaveText(['5×', '10×', '20×']);
+  await expect(editor.locator('#speedChoices input:checked')).toHaveValue('10');
+  await expect(editor.locator('#speedChoices label').nth(1)).toContainText('2 s per slide · about 0:52 for 25 slides'); // 5 + 20 slides
+  await expect(editor.locator('#speedCancel')).toBeFocused();
+  await editor.screenshot({ path: path.join(SHOTS, 'speedrun-dialog.png') });
+
+  // Enter on a freshly opened dialog cancels; so do Cancel, Esc and the F key. Nothing starts.
+  await editor.keyboard.press('Enter');
+  await expect(dialog).toBeHidden();
+  await editor.click('#speedrunOpen');
+  await editor.keyboard.press('f');
+  await editor.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await editor.click('#speedrunOpen');
+  await editor.locator('#speedChoices input[value="20"]').check();
+  await editor.click('#speedCancel');
+  await expect(dialog).toBeHidden();
+  expect(app.windows().length).toBe(1);
+
+  // The choice is not remembered: it opens on 10× again.
+  await editor.click('#speedrunOpen');
+  await expect(editor.locator('#speedChoices input:checked')).toHaveValue('10');
+  await editor.click('#speedCancel');
+
+  // The main process refuses any other speed, including normal and slow motion, and opens nothing.
+  const eventId = await editor.evaluate(async () => (await window.pk.listEvents())[0].id);
+  for (const bad of [1, 0.5, 2, 100, -10, 'fast', null]) {
+    const message = await editor.evaluate(async ([id, f]) => window.pk.speedrun(id, f).then(() => 'opened', (e) => e.message), [eventId, bad]);
+    expect(message).toContain('must be 5, 10 or 20');
+  }
+  expect(app.windows().length).toBe(1);
+
+  // Nothing about speed is ever written to disk.
+  const saved = fs.readFileSync(path.join(dataDir, 'events.json'), 'utf-8');
+  expect(saved).not.toMatch(/speedrun|factor/i);
+  await app.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });
@@ -744,5 +810,92 @@ test('practice: plays one PDF with the timer, saves nothing, and uses the select
   await expect(editor.locator('.event-item')).toHaveCount(1);
   expect(await rowNames(editor)).toEqual(['charlie-3-slides.pdf']);
   await expect(editor.locator('#playFromStart')).toBeHidden(); // stopping practice mid-deck sets no resume point
+  await app.close();
+});
+
+test('speedrun: runs every deck by itself at the chosen speed, reports, and leaves normal Play untouched', async () => {
+  const { app, editor } = await launch();
+  // 5 s per slide, 4 slides max: alpha plays 4, bravo 4, charlie 3 = 11 slides. At 10x that is 0.5 s each.
+  await setupEvent(app, editor, { time: '5', max: '4', files: [fx('alpha-5-slides.pdf'), fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });
+
+  await editor.click('#speedrunOpen');
+  const started = Date.now();
+  const player = await openPlayer(app, editor, () => editor.click('#speedStart'));
+  await expect(player.locator('body')).toHaveAttribute('data-speedrun', '10');
+  await expect(player.locator('#speedBanner')).toBeVisible();
+  await expect(player.locator('#speedBanner')).toHaveText('SPEED TEST 10× — not a real run');
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.getTitle().includes('speed test')))).toBe(true);
+
+  // No key is pressed: it gets through all three decks and reports.
+  await expect(player.locator('body')).toHaveAttribute('data-deck', '1', { timeout: 15000 });
+  await expect(player.locator('#speedBanner')).toBeVisible(); // still labelled mid-run
+  await player.screenshot({ path: path.join(SHOTS, 'speedrun-running.png') });
+  await expect(player.locator('body')).toHaveAttribute('data-speedrun-done', 'ok', { timeout: 30000 });
+  const took = Date.now() - started;
+  await expect(player.locator('.ended-title')).toHaveText('Speedrun passed');
+  await expect(player.locator('#speedReportSummary')).toHaveText('3 of 3 decks opened · 11 of 11 slides drawn');
+  await expect(player.locator('#speedReportLines li')).toHaveCount(0);
+  await expect(player.locator('#speedBanner')).toBeVisible();
+  await player.screenshot({ path: path.join(SHOTS, 'speedrun-report.png') });
+  console.log(`speedrun of 11 slides at 10x took ${took} ms (a normal run is at least 55000 ms)`);
+  expect(took).toBeGreaterThan(11 * 500); // every slide had its time
+  expect(took).toBeLessThan(30000); // and it really was fast
+
+  let closed = player.waitForEvent('close');
+  await player.keyboard.press('Escape');
+  await closed;
+
+  // A speedrun leaves no resume point and changes no settings.
+  await expect(editor.locator('#playFromStart')).toBeHidden();
+  await expect(editor.locator('#timePerSlide')).toHaveValue('5');
+  expect(fs.readFileSync(path.join(dataDir, 'events.json'), 'utf-8')).not.toMatch(/speedrun|factor/i);
+
+  // Stopping a speedrun part-way does not set a resume point either.
+  await editor.click('#speedrunOpen');
+  const second = await openPlayer(app, editor, () => editor.click('#speedStart'));
+  await expect(second.locator('body')).toHaveAttribute('data-deck', '1', { timeout: 15000 });
+  closed = second.waitForEvent('close');
+  await second.keyboard.press('Escape');
+  await closed;
+  await expect(editor.locator('#playFromStart')).toBeHidden();
+
+  // The very next Play is a normal run: no banner, no auto-start, normal speed.
+  const normal = await openPlayer(app, editor);
+  expect(await normal.evaluate(() => document.body.dataset.speedrun)).toBeUndefined();
+  await expect(normal.locator('#speedBanner')).toBeHidden();
+  expect(new URL(normal.url()).searchParams.has('speedrun')).toBe(false);
+  await normal.waitForTimeout(2500); // well past the 1 s a speedrun waits on a Play screen
+  await expect(normal.locator('body')).toHaveAttribute('data-phase', 'waiting');
+  await normal.keyboard.press('Space');
+  await normal.waitForTimeout(2000); // a speedrun would be on slide 4 by now; a 5 s slide has not moved
+  await expect(normal.locator('body')).toHaveAttribute('data-slide', '0');
+  await expect(normal.locator('body')).toHaveAttribute('data-phase', 'playing');
+  closed = normal.waitForEvent('close');
+  await normal.keyboard.press('Escape');
+  await closed;
+  await app.close();
+});
+
+test('speedrun: an unreadable deck and skipping ahead are reported, not passed', async () => {
+  const { app, editor } = await launch();
+  await setupEvent(app, editor, { time: '5', max: '4', files: [fx('alpha-5-slides.pdf'), fx('charlie-3-slides.pdf')] });
+  // Damage the library copy of the second deck after it was added, as a failing disk or a bad file would.
+  const lib = path.join(dataDir, 'library');
+  const second = JSON.parse(fs.readFileSync(path.join(dataDir, 'events.json'), 'utf-8')).events[0].items[1].file;
+  fs.writeFileSync(path.join(lib, second), 'this is no longer a pdf', 'utf-8');
+
+  await editor.click('#speedrunOpen');
+  await editor.locator('#speedChoices input[value="20"]').check();
+  const player = await openPlayer(app, editor, () => editor.click('#speedStart'));
+  await expect(player.locator('#speedBanner')).toHaveText('SPEED TEST 20× — not a real run');
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'playing', { timeout: 10000 });
+  await player.keyboard.press('ArrowRight'); // skip one slide by hand
+  await expect(player.locator('body')).toHaveAttribute('data-speedrun-done', 'problems', { timeout: 20000 });
+  await expect(player.locator('.ended-title')).toHaveText('Speedrun finished with problems');
+  await expect(player.locator('#speedReportSummary')).toContainText('1 of 2 decks opened');
+  await expect(player.locator('#speedReportLines li').first()).toContainText('“charlie-3-slides.pdf” could not be opened');
+  const closed = player.waitForEvent('close');
+  await player.keyboard.press('Escape');
+  await closed;
   await app.close();
 });

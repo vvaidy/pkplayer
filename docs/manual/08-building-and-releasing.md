@@ -129,6 +129,7 @@ The Windows build is unsigned, so SmartScreen warns on first launch. Signing it 
 | `src/lib/presets.js` | The Format presets (PechaKucha, Ignite). |
 | `src/lib/preflight.js` | Deck warnings: short decks and odd page shapes. |
 | `src/lib/themes.js` | The color themes and the math that derives each theme's full palette. `src/renderer/theme.js` applies one to a window. |
+| `src/lib/speedrun.js` | Speedrun test: the allowed speeds, timing and the end report. |
 | `src/lib/deck-label.js` | What the Play screen says about a deck; default presenter and title from PDF properties. |
 | `src/lib/player-controller.js` | Pure timing state machine (waiting / playing / paused / ended). |
 | `src/renderer/` | Editor and player pages; pdf.js rendering in `pdf.js`. |

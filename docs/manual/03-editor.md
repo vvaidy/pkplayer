@@ -97,6 +97,19 @@ Added PDFs are **copied** into PK Player's library, so the originals can be move
 
 The resume point is kept until you quit the app.
 
+## Speedrun test
+
+**Speedrun test…** (above the playlist, and in the File menu) plays every slide of every deck in the event fast, fullscreen on the display you chose, so you can see that everything loads and displays before the night.
+
+- A dialog asks first. Choose **5×**, **10×** or **20×** and click **Start test**. It shows how long each choice will take. Cancel is the default button.
+- Each deck's Play screen shows for a second, then the deck starts by itself. You don't press anything.
+- A yellow **SPEED TEST 10× — not a real run** bar stays across the top of the screen the whole time.
+- Each slide is given its time only once it has finished drawing, so a slow or broken page can't slip past.
+- At the end a report says **Speedrun passed**, or lists what went wrong: a PDF that could not be opened, a slide that could not be drawn, or a slide that took more than 10 seconds.
+- **Space** pauses so you can look at a slide, the arrow keys and **N** skip, and **Esc** stops. Skipping means the report will say some slides were not shown.
+
+**It cannot be left on.** The speed belongs to that one test run. It is never saved, the dialog always opens on 10×, there is no keyboard shortcut, and there is no slower-than-normal choice. **Play**, **F**, Enter and the row **▶** buttons always run at normal speed. A speedrun also leaves the event's resume point alone.
+
 ## Practice a PDF
 
 **File → Practice a PDF…** (⇧⌘P / Ctrl+Shift+P) plays a single PDF with the timer, without creating an event. It is meant for a presenter rehearsing their own talk. The first screen of a fresh install has a **Practice a PDF…** button too.

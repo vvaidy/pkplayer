@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { PRACTICE_EVENT_ID, Store } from './src/main/store.js';
 import { buildHelpMenu } from './src/main/help-menu.js';
 import { exportTheme, isCustomThemeId, parseThemeFile, themeVars } from './src/lib/themes.js';
+import { parseSpeedrun } from './src/lib/speedrun.js';
 import { debug } from './src/lib/debug.js';
 
 // ---------- app parameters ----------
@@ -142,14 +143,18 @@ function createEditorWindow() {
   });
 }
 
-async function openPlayer(eventId, startItemId) {
+/**
+ * Open the fullscreen player. `speedrun` (5, 10 or 20) makes this one window a speedrun test;
+ * it is passed in the window's URL only and is never stored, so the next Play is a normal one.
+ */
+async function openPlayer(eventId, startItemId, { speedrun = null } = {}) {
   store.getEvent(eventId); // throws if the event does not exist
   if (playerWin) await closePlayer();
   const display = targetDisplay();
   const { x, y, width, height } = display.bounds;
   debug('player', `opening event ${eventId} on display ${display.id} (${width}x${height})`);
 
-  const session = { eventId, itemId: startItemId || null };
+  const session = { eventId, itemId: startItemId || null, speedrun };
   // Which practice deck this window is showing, so closing it ends that practice and no other.
   if (eventId === PRACTICE_EVENT_ID) session.practiceToken = store.getEvent(eventId).items[0].id;
   const win = new BrowserWindow({
@@ -168,6 +173,7 @@ async function openPlayer(eventId, startItemId) {
   playerSession = session;
   const q = new URLSearchParams({ event: eventId, ...themeParams() });
   if (startItemId) q.set('start', startItemId);
+  if (speedrun) q.set('speedrun', String(speedrun));
   win.loadURL(`${PLAYER_URL}?${q}${DEBUG_QUERY}`);
   win.once('ready-to-show', () => {
     if (win.isDestroyed()) return;
@@ -181,7 +187,9 @@ async function openPlayer(eventId, startItemId) {
   if (sleepBlockerId === null) sleepBlockerId = powerSaveBlocker.start('prevent-display-sleep');
 
   win.on('closed', () => {
-    if (session.eventId === PRACTICE_EVENT_ID) {
+    if (session.speedrun) {
+      // A speedrun is a test: it leaves the event's resume point exactly as it was.
+    } else if (session.eventId === PRACTICE_EVENT_ID) {
       resumePoints.delete(session.eventId); // practice never resumes
       store.endPractice(session.practiceToken); // and leaves nothing behind
     } else if (session.itemId) resumePoints.set(session.eventId, session.itemId);
@@ -318,6 +326,13 @@ function registerIpc() {
     return res.canceled ? [] : res.filePaths;
   });
   handle('player:open', (eventId, startItemId) => openPlayer(eventId, startItemId));
+  // Speedrun test: the whole event from deck 1, fast. Only the three fixed speeds are accepted.
+  handle('player:speedrun', (eventId, factor) => {
+    const speedrun = parseSpeedrun(factor);
+    if (!speedrun) throw new Error(`Speedrun speed must be 5, 10 or 20 (got ${factor})`);
+    if (eventId === PRACTICE_EVENT_ID) throw new Error('Speedrun is for events, not practice.');
+    return openPlayer(eventId, null, { speedrun });
+  });
   // Practice: pick one PDF and play it with the timer, without creating or saving an event.
   // Returns the file's name, or null if the file dialog was cancelled.
   handle('practice:start', async (opts) => {
@@ -361,6 +376,8 @@ function buildMenu() {
         { label: 'Add PDFs…', accelerator: 'CmdOrCtrl+O', click: () => editorWin?.webContents.send('menu:addPdfs') },
         { type: 'separator' },
         { label: 'Practice a PDF…', accelerator: 'CmdOrCtrl+Shift+P', click: () => editorWin?.webContents.send('menu:practice') },
+        // No keyboard shortcut on purpose: a speedrun should never start by accident.
+        { label: 'Speedrun Test…', click: () => editorWin?.webContents.send('menu:speedrun') },
         { type: 'separator' },
         { label: 'Reveal Library Folder', click: () => shell.openPath(store.libraryDir) },
         { type: 'separator' },

@@ -3,6 +3,9 @@
 import { debug } from '../lib/debug.js';
 import { PHASE, PlayerController } from '../lib/player-controller.js';
 import { deckLabel } from '../lib/deck-label.js';
+import {
+  SPEEDRUN_DRAW_TIMEOUT_MS, SPEEDRUN_PLAY_SCREEN_MS, parseSpeedrun, speedrunReport, speedrunSlideSeconds,
+} from '../lib/speedrun.js';
 import { openPdf, renderPage } from './pdf.js';
 
 const pk = window.pk;
@@ -13,6 +16,12 @@ const FLASH_MS = 700;
 const params = new URLSearchParams(location.search);
 const EVENT_ID = params.get('event');
 const START_ITEM_ID = params.get('start');
+/**
+ * Speedrun test: 5, 10 or 20 when this window was opened for one, otherwise null.
+ * It comes only from this window's URL and is never saved, so a normal run is always null.
+ * Every speedrun-only line below is behind `if (SPEEDRUN)`.
+ */
+const SPEEDRUN = parseSpeedrun(params.get('speedrun'));
 
 let ev = null;
 let docs = [];
@@ -22,6 +31,16 @@ let lastDeckReported = null;
 const slideCache = new Map();
 
 const slideKey = (d, s) => `${d}:${s}`;
+
+// ---------- clock ----------
+// In a normal run this is exactly performance.now(). In a speedrun the clock stops while the
+// current slide is still being drawn, so a slow page gets its full time on screen and cannot
+// slip past unseen.
+let heldMs = 0;
+const clock = () => performance.now() - heldMs;
+
+/** Speedrun bookkeeping: which slides were drawn, and which could not be. */
+const run = { shown: new Set(), problems: new Map(), holdKey: null, holdStart: 0, autoStartDeck: null, autoStartTimer: null };
 
 // ---------- rendering ----------
 
@@ -59,7 +78,9 @@ async function showCurrent() {
   if (slideKey(now.deckIndex, now.slideIndex) !== want || now.phase === PHASE.ENDED) return; // moved on meanwhile
   if (canvas) {
     $('stage').replaceChildren(canvas);
+    if (SPEEDRUN) run.shown.add(want);
   } else {
+    if (SPEEDRUN) run.problems.set(want, 'failed');
     const err = document.createElement('div');
     err.className = 'hint';
     err.textContent = `Could not render slide ${v.slideIndex + 1}`;
@@ -99,10 +120,52 @@ function updateUi() {
   }
   if (active) $('counter').textContent = `${v.slideIndex + 1} / ${v.slideCount}`;
 
+  if (SPEEDRUN) updateSpeedrun(v);
+
   const itemId = v.phase === PHASE.ENDED ? null : ev.items[v.deckIndex]?.id ?? null;
   if (itemId !== lastDeckReported) {
     lastDeckReported = itemId;
     pk.reportPosition(itemId).catch((err) => debug('player', 'report position failed', err));
+  }
+}
+
+/** Speedrun only: start each deck by itself after a short look at its Play screen, and report at the end. */
+function updateSpeedrun(v) {
+  if (v.phase === PHASE.WAITING && run.autoStartDeck !== v.deckIndex) {
+    run.autoStartDeck = v.deckIndex;
+    clearTimeout(run.autoStartTimer);
+    run.autoStartTimer = setTimeout(() => {
+      const cur = controller.view();
+      if (cur.phase === PHASE.WAITING && cur.deckIndex === v.deckIndex) startDeck();
+    }, SPEEDRUN_PLAY_SCREEN_MS);
+  }
+  if (v.phase === PHASE.ENDED && !document.body.dataset.speedrunDone) {
+    const decks = ev.items.map((it, d) => ({
+      name: it.name,
+      expected: controller.slideCounts[d],
+      shown: [...run.shown].filter((k) => k.startsWith(`${d}:`)).length,
+      unreadable: !docs[d],
+    }));
+    const problems = [...run.problems].map(([key, reason]) => {
+      const [deck, slide] = key.split(':').map(Number);
+      return { deck, slide, reason };
+    }).sort((a, b) => a.deck - b.deck || a.slide - b.slide);
+    const report = speedrunReport({ decks, problems });
+    debug('player', `speedrun ${SPEEDRUN}x: ${report.headline} — ${report.summary}`);
+    document.querySelector('.ended-title').textContent = report.headline;
+    $('speedReportSummary').textContent = report.summary;
+    $('speedReportLines').replaceChildren(...report.lines.slice(0, 12).map((text) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      return li;
+    }));
+    if (report.lines.length > 12) {
+      const more = document.createElement('li');
+      more.textContent = `…and ${report.lines.length - 12} more.`;
+      $('speedReportLines').append(more);
+    }
+    $('speedReport').hidden = false;
+    document.body.dataset.speedrunDone = report.ok ? 'ok' : 'problems';
   }
 }
 
@@ -115,8 +178,31 @@ function updateProgress(now) {
   $('progressFill').style.transform = `scaleX(${controller.progress(now)})`;
 }
 
+/** Speedrun only: stop the clock while the slide that should be on screen is still being drawn. */
+function holdForDrawing(real, sinceLastFrame) {
+  const v = controller.view();
+  const key = slideKey(v.deckIndex, v.slideIndex);
+  if (v.phase !== PHASE.PLAYING || document.body.dataset.shown === key) {
+    run.holdKey = null;
+    return;
+  }
+  if (run.holdKey !== key) {
+    run.holdKey = key;
+    run.holdStart = real;
+  }
+  if (real - run.holdStart > SPEEDRUN_DRAW_TIMEOUT_MS) {
+    run.problems.set(key, 'slow'); // give up waiting: report it and let the run carry on
+    return;
+  }
+  heldMs += sinceLastFrame;
+}
+
+let lastFrame = performance.now();
 function loop() {
-  const now = performance.now();
+  const real = performance.now();
+  if (SPEEDRUN) holdForDrawing(real, real - lastFrame);
+  lastFrame = real;
+  const now = clock();
   if (controller.tick(now)) onStateChange();
   updateProgress(now);
   requestAnimationFrame(loop);
@@ -148,12 +234,12 @@ function exitPlayer() {
 }
 
 function startDeck() {
-  if (controller.play(performance.now())) onStateChange();
+  if (controller.play(clock())) onStateChange();
 }
 
 function onKey(e) {
   if (e.metaKey || e.ctrlKey) return; // leave system shortcuts alone
-  const now = performance.now();
+  const now = clock();
   const k = e.key;
   if (k === 'Escape' || k === 'x' || k === 'X' || k === 'Delete' || k === 'Backspace') {
     e.preventDefault();
@@ -242,9 +328,15 @@ async function init() {
   });
 
   const startDeckIndex = Math.max(0, ev.items.findIndex((it) => it.id === START_ITEM_ID));
+  if (SPEEDRUN) {
+    document.body.dataset.speedrun = String(SPEEDRUN);
+    document.title = 'PK Player — Presenting (speed test)';
+    $('speedBanner').textContent = `SPEED TEST ${SPEEDRUN}× — not a real run`;
+    $('speedBanner').hidden = false;
+  }
   controller = new PlayerController({
     pageCounts,
-    timePerSlide: ev.timePerSlide,
+    timePerSlide: SPEEDRUN ? speedrunSlideSeconds(ev.timePerSlide, SPEEDRUN) : ev.timePerSlide,
     maxSlides: ev.maxSlides,
     startDeck: startDeckIndex,
   });

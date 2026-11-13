@@ -4,6 +4,7 @@ import { slidesToPlay } from '../lib/player-controller.js';
 import { CUSTOM_PRESET_ID, PRESETS, presetById, presetIdFor } from '../lib/presets.js';
 import { preflight } from '../lib/preflight.js';
 import { suggestFromMetadata } from '../lib/deck-label.js';
+import { DEFAULT_SPEEDRUN_FACTOR, SPEEDRUN_FACTORS, speedrunDuration, speedrunSlideSeconds } from '../lib/speedrun.js';
 import { openPdf, renderPage } from './pdf.js';
 import { applyTheme } from './theme.js';
 import {
@@ -618,6 +619,46 @@ async function practice() {
   await guarded('Starting practice', () => pk.practice(opts));
 }
 
+// ---------- speedrun test ----------
+
+/**
+ * Ask before starting a speedrun: pick one of the fixed speeds, then confirm.
+ * Nothing here is saved; the speed goes to that one player window and nowhere else.
+ */
+function openSpeedrunDialog() {
+  const ev = selected();
+  if (!ev || ev.items.length === 0) {
+    toast('Add at least one PDF before running a speedrun test.');
+    return;
+  }
+  let slides = 0;
+  for (const it of ev.items) slides += itemStats(ev, it).plays || 0;
+  $('speedChoices').replaceChildren(...SPEEDRUN_FACTORS.map((factor) => {
+    const label = document.createElement('label');
+    const radio = Object.assign(document.createElement('input'), { type: 'radio', name: 'speed', value: String(factor) });
+    radio.checked = factor === DEFAULT_SPEEDRUN_FACTOR; // always starts on the default: the last choice is not remembered
+    const name = Object.assign(document.createElement('span'), { className: 'speed-name', textContent: `${factor}×` });
+    const secs = speedrunSlideSeconds(ev.timePerSlide, factor);
+    const total = speedrunDuration({ slides, decks: ev.items.length, timePerSlide: ev.timePerSlide, factor });
+    const time = Object.assign(document.createElement('span'), {
+      className: 'speed-time',
+      textContent: `${Number(secs.toFixed(1))} s per slide · about ${fmtDuration(total)} for ${slides} slides`,
+    });
+    label.append(radio, name, time);
+    return label;
+  }));
+  $('speedDialog').showModal();
+  $('speedCancel').focus(); // Enter cancels unless you move to Start on purpose
+}
+
+async function startSpeedrun() {
+  const ev = selected();
+  const factor = Number($('speedForm').elements.speed.value);
+  $('speedDialog').close();
+  if (!ev) return;
+  await guarded('Starting speedrun test', () => pk.speedrun(ev.id, factor));
+}
+
 // ---------- drag & drop ----------
 
 let dropIndexForImport;
@@ -903,6 +944,12 @@ function wireControls() {
   $('newEvent').addEventListener('click', () => newEvent());
   $('emptyNew').addEventListener('click', () => newEvent());
   $('emptyPractice').addEventListener('click', () => practice());
+  $('speedrunOpen').addEventListener('click', openSpeedrunDialog);
+  $('speedCancel').addEventListener('click', () => $('speedDialog').close());
+  $('speedForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    startSpeedrun();
+  });
   $('addPdfs').addEventListener('click', addPdfsViaDialog);
   $('dropHint').addEventListener('click', addPdfsViaDialog);
   $('deleteEvent').addEventListener('click', deleteSelectedEvent);
@@ -962,7 +1009,7 @@ function wireControls() {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (isTyping(e.target) || $('themeDialog').open) return; // no Play shortcut while typing or editing a theme
+    if (isTyping(e.target) || $('themeDialog').open || $('speedDialog').open) return; // no Play shortcut while typing or in a dialog
     if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       play();
@@ -971,6 +1018,7 @@ function wireControls() {
 
   pk.onMenu('newEvent', () => newEvent());
   pk.onMenu('practice', () => practice());
+  pk.onMenu('speedrun', () => openSpeedrunDialog());
   pk.onMenu('addPdfs', () => (selected() ? addPdfsViaDialog() : toast('Create or select an event first.')));
   pk.onPlayerClosed(async ({ eventId }) => {
     await refreshEvents();
