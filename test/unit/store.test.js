@@ -172,6 +172,57 @@ test('updateItem ignores other fields and rejects bad input', () => {
   assert.throws(() => s.updateItem('nope', id, { title: 'x' }), StoreError);
 });
 
+test('page range: first and last page are stored, cleared and validated', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  const id = added[0].id;
+  assert.deepEqual([added[0].firstPage, added[0].lastPage], [null, null]);
+  assert.deepEqual((({ firstPage, lastPage }) => [firstPage, lastPage])(s.updateItem(ev.id, id, { firstPage: 2, lastPage: '21' })), [2, 21]);
+  const again = new Store(dir).getEvent(ev.id).items[0];
+  assert.deepEqual([again.firstPage, again.lastPage], [2, 21]);
+  // One at a time leaves the other alone; blank or null clears; page 1 is the same as not set.
+  assert.deepEqual((({ firstPage, lastPage }) => [firstPage, lastPage])(s.updateItem(ev.id, id, { lastPage: '' })), [2, null]);
+  assert.equal(s.updateItem(ev.id, id, { firstPage: 1 }).firstPage, null);
+  assert.equal(s.updateItem(ev.id, id, { firstPage: null }).firstPage, null);
+  assert.deepEqual((({ firstPage, lastPage }) => [firstPage, lastPage])(s.updateItem(ev.id, id, { firstPage: 5, lastPage: 5 })), [5, 5]);
+});
+
+test('page range: bad values are refused and leave the deck untouched', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  const id = added[0].id;
+  s.updateItem(ev.id, id, { presenter: 'Asha', firstPage: 3, lastPage: 12 });
+  for (const patch of [{ firstPage: 0 }, { firstPage: 'two' }, { lastPage: 2.5 }, { lastPage: -4 }, { firstPage: 99999 }]) {
+    assert.throws(() => s.updateItem(ev.id, id, patch), /must be a whole number/, JSON.stringify(patch));
+  }
+  assert.throws(() => s.updateItem(ev.id, id, { lastPage: 2 }), /must not be before the first page/);
+  assert.throws(() => s.updateItem(ev.id, id, { firstPage: 13 }), /must not be before the first page/);
+  // A refused page number must not let a name change through either.
+  assert.throws(() => s.updateItem(ev.id, id, { presenter: 'Someone else', firstPage: 'x' }), StoreError);
+  const it = new Store(dir).getEvent(ev.id).items[0];
+  assert.deepEqual([it.presenter, it.firstPage, it.lastPage], ['Asha', 3, 12]);
+  assert.deepEqual([s.getEvent(ev.id).items[0].presenter, s.getEvent(ev.id).items[0].firstPage], ['Asha', 3]);
+});
+
+test('page range: old files load with no range, damaged values are dropped, and duplicates keep it', () => {
+  fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify({
+    version: 1,
+    settings: { displayId: null },
+    events: [{ id: 'e1', name: 'Old', timePerSlide: 20, maxSlides: 20, items: [
+      { id: 'i1', name: 'a.pdf', file: 'a.pdf', pageCount: 20 },
+      { id: 'i2', name: 'b.pdf', file: 'b.pdf', pageCount: 20, firstPage: 'junk', lastPage: -3 },
+      { id: 'i3', name: 'c.pdf', file: 'c.pdf', pageCount: 26, firstPage: 2, lastPage: 21 },
+    ] }],
+  }), { encoding: 'utf-8' });
+  const s = new Store(dir);
+  const items = s.getEvent('e1').items;
+  assert.deepEqual(items.map((it) => [it.firstPage, it.lastPage]), [[null, null], [null, null], [2, 21]]);
+  const copy = s.duplicateEvent('e1').items[2];
+  assert.deepEqual([copy.firstPage, copy.lastPage], [2, 21]);
+});
+
 test('events saved by an older version load with empty presenter and title', () => {
   fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify({
     version: 1,

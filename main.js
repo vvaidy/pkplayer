@@ -158,9 +158,10 @@ function createEditorWindow() {
  * Open a PDF in a reader window: an ordinary, resizable window for reading, not presenting.
  * @param {string} src "library/<file>" or "external/<token>"
  * @param {string} name shown in the title bar
- * @param {number} [maxSlides] the event's Max slides, so the reader can mark pages that will not play
+ * @param {object} [played] for a deck opened from an event: { maxSlides, firstPage, lastPage }, so the
+ *   reader can mark the pages that event will not play
  */
-function openReader(src, name, maxSlides) {
+function openReader(src, name, played = {}) {
   const win = new BrowserWindow({
     width: 1100,
     height: 820,
@@ -173,7 +174,9 @@ function openReader(src, name, maxSlides) {
   });
   readerWins.add(win);
   const query = new URLSearchParams({ src, name, ...themeParams() });
-  if (Number.isInteger(maxSlides) && maxSlides > 0) query.set('max', String(maxSlides));
+  for (const [param, value] of [['max', played.maxSlides], ['first', played.firstPage], ['last', played.lastPage]]) {
+    if (Number.isInteger(value) && value > 0) query.set(param, String(value));
+  }
   win.loadURL(`${READER_URL}?${query}${DEBUG_QUERY}`);
   win.once('ready-to-show', () => win.show());
   win.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -374,7 +377,7 @@ function registerIpc() {
     const event = store.getEvent(eventId);
     const item = event.items.find((it) => it.id === itemId);
     if (!item) throw new Error('That deck is no longer in the playlist.');
-    return openReader(`library/${item.file}`, item.name, event.maxSlides);
+    return openReader(`library/${item.file}`, item.name, { maxSlides: event.maxSlides, firstPage: item.firstPage, lastPage: item.lastPage });
   });
   // ...or any PDF the user picks. Returns false if the file dialog was cancelled.
   handle('reader:openFile', async () => {

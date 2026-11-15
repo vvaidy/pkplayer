@@ -1,8 +1,8 @@
 // Editor window: manage Events, their settings and PDF playlists.
 import { debug } from '../lib/debug.js';
-import { slidesToPlay } from '../lib/player-controller.js';
 import { CUSTOM_PRESET_ID, PRESETS, presetById, presetIdFor } from '../lib/presets.js';
 import { preflight } from '../lib/preflight.js';
+import { describePages, hasRange, playedPages } from '../lib/page-range.js';
 import { suggestFromMetadata } from '../lib/deck-label.js';
 import { DEFAULT_SPEEDRUN_FACTOR, SPEEDRUN_FACTORS, speedrunDuration, speedrunSlideSeconds } from '../lib/speedrun.js';
 import { openPdf, renderPage } from './pdf.js';
@@ -214,14 +214,19 @@ function itemStats(ev, it) {
   const pages = info?.pageCount ?? it.pageCount;
   if (info?.error) return { pages: null, plays: 0, error: info.error };
   if (pages == null) return { pages: null, plays: null };
-  return { pages, plays: slidesToPlay(pages, ev.maxSlides) };
+  // `played` says which pages run: the deck's own page range, capped by Max slides.
+  const played = playedPages(it, pages, ev.maxSlides);
+  return { pages, plays: played.count, played };
 }
 
 /** Pre-flight warnings for the event's decks: deck id -> [{ kind, text }]. */
 function deckWarnings(ev) {
   const decks = ev.items.map((it) => {
     const info = pdfInfo.get(it.file);
-    return { id: it.id, pages: info?.error ? null : (info?.pageCount ?? it.pageCount), aspect: info?.aspect ?? null };
+    const pages = info?.error ? null : (info?.pageCount ?? it.pageCount);
+    // A deck is "short" when its chosen pages are fewer than Max slides. An empty range is reported separately.
+    const played = pages == null ? null : playedPages(it, pages, ev.maxSlides);
+    return { id: it.id, pages: played && !played.empty ? played.count : null, aspect: info?.aspect ?? null };
   });
   return preflight(decks, {
     maxSlides: ev.maxSlides,
@@ -241,7 +246,7 @@ function renderSummary() {
     const s = itemStats(ev, it);
     if (s.plays == null) unknown = true;
     else slides += s.plays;
-    if (s.error || (s.pages != null && s.pages > ev.maxSlides) || warnings.has(it.id)) flagged += 1;
+    if (s.error || s.played?.capped || s.played?.empty || warnings.has(it.id)) flagged += 1;
   }
   const n = ev.items.length;
   const parts = [
@@ -288,6 +293,12 @@ function buildRow(ev, it, i, warnings) {
         <input class="who-input presenter" type="text" maxlength="200" spellcheck="false" placeholder="Presenter (optional)" aria-label="Presenter">
         <span class="who-sep" aria-hidden="true">·</span>
         <input class="who-input title" type="text" maxlength="200" placeholder="Talk title (optional)" aria-label="Talk title">
+        <span class="who-sep" aria-hidden="true">·</span>
+        <label class="range" title="Which pages of this PDF to play. Leave both empty to play from page 1 to the end.">pages
+          <input class="who-input range-input firstPage" type="text" inputmode="numeric" maxlength="4" placeholder="1" aria-label="First page to play">
+          <span aria-hidden="true">–</span>
+          <input class="who-input range-input lastPage" type="text" inputmode="numeric" maxlength="4" placeholder="end" aria-label="Last page to play">
+        </label>
       </div>
       <div class="detail"></div>
     </div>
@@ -305,10 +316,10 @@ function buildRow(ev, it, i, warnings) {
   li.querySelector('.file').title = it.name;
   fillRowInfo(li, ev, it, warnings);
 
-  for (const key of ['presenter', 'title']) {
+  for (const key of ['presenter', 'title', 'firstPage', 'lastPage']) {
     const input = li.querySelector(`.who-input.${key}`);
-    const current = () => selected()?.items.find((x) => x.id === it.id)?.[key] || '';
-    input.value = it[key] || '';
+    const current = () => String(selected()?.items.find((x) => x.id === it.id)?.[key] ?? '');
+    input.value = String(it[key] ?? '');
     // Press-and-drag on a field still drags the row. A plain click (or tabbing in) means
     // "edit": the row stops being draggable until the field loses focus, so the mouse can select text.
     let pressing = false;
@@ -322,7 +333,7 @@ function buildRow(ev, it, i, warnings) {
       pressing = false;
       li.draggable = true;
     });
-    input.addEventListener('change', () => saveItemText(it.id, key, input));
+    input.addEventListener('change', () => saveItemField(it.id, key, input));
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') input.blur();
       else if (e.key === 'Escape') {
@@ -415,7 +426,14 @@ function fillRowInfo(li, ev, it, warnings) {
     badge('Reading…');
   } else {
     badge(`${s.pages} page${s.pages === 1 ? '' : 's'}`);
-    if (s.pages > ev.maxSlides) badge(`only first ${ev.maxSlides} play`, 'warn');
+    const ranged = hasRange(it);
+    if (s.played.empty) {
+      badge(`starts at page ${s.played.first}, past the end — nothing plays`, 'err');
+    } else if (s.played.capped) {
+      badge(ranged ? `only ${describePages(s.played)} play` : `only first ${ev.maxSlides} play`, 'warn');
+    } else if (ranged) {
+      badge(`plays ${describePages(s.played)}`);
+    }
     for (const w of warnings.get(it.id) || []) badge(w.text, 'warn');
     badge(fmtDuration(s.plays * ev.timePerSlide));
   }
@@ -498,18 +516,26 @@ async function applyMetadataDefaults(eventId, added) {
   }));
 }
 
-/** Save one of a deck's text fields ("presenter" or "title") from its row input. */
-async function saveItemText(itemId, key, input) {
+const ITEM_FIELD_LABELS = {
+  presenter: 'Saving presenter', title: 'Saving talk title', firstPage: 'Saving first page', lastPage: 'Saving last page',
+};
+
+/** Save one of a deck's row fields (presenter, title, firstPage, lastPage) from its input. */
+async function saveItemField(itemId, key, input) {
   const ev = selected();
   const it = ev?.items.find((x) => x.id === itemId);
   if (!it) return;
-  const label = key === 'presenter' ? 'Saving presenter' : 'Saving talk title';
-  const updated = await guarded(label, () => pk.updateItem(ev.id, itemId, { [key]: input.value }));
+  const updated = await guarded(ITEM_FIELD_LABELS[key], () => pk.updateItem(ev.id, itemId, { [key]: input.value }));
   if (updated) {
-    it.presenter = updated.presenter;
-    it.title = updated.title;
+    for (const k of Object.keys(ITEM_FIELD_LABELS)) it[k] = updated[k];
+    if (key === 'firstPage' || key === 'lastPage') {
+      // The range changes slide counts, run times and warnings, here and in the summary.
+      updateRows();
+      renderSummary();
+    }
   }
-  if (document.activeElement !== input) input.value = it[key] || '';
+  // Show what is stored: the tidied value after a save, or the old one if the save was refused.
+  if (!updated || document.activeElement !== input) input.value = String(it[key] ?? '');
 }
 
 async function importFiles(eventId, paths) {

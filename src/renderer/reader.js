@@ -5,7 +5,7 @@ import {
   FIT_PAGE, FIT_WIDTH, POINT_TO_PIXEL, ZOOM_STEPS, clampZoom, findInDocument, fitZoom, matchRanges, nextZoom,
   normalizeQuery, stepHit,
 } from '../lib/reader.js';
-import { slidesToPlay } from '../lib/player-controller.js';
+import { describePages, playedPages } from '../lib/page-range.js';
 import { TextLayer, openPdfAt } from './pdf.js';
 
 // ---------- reader parameters ----------
@@ -22,6 +22,9 @@ const SRC = params.get('src') || '';
 const NAME = params.get('name') || 'PDF';
 /** Max slides of the event this deck was opened from, or null for a PDF opened on its own. */
 const MAX_SLIDES = Number.parseInt(params.get('max'), 10) > 0 ? Number.parseInt(params.get('max'), 10) : null;
+/** The deck's own page range in that event (first and last page to play), when it has one. */
+const pageParam = (name) => (Number.parseInt(params.get(name), 10) > 0 ? Number.parseInt(params.get(name), 10) : null);
+const RANGE = { firstPage: pageParam('first'), lastPage: pageParam('last') };
 
 let doc = null;
 /** One entry per page: { el, size: {width, height} in points, drawnAt: zoom|null, task, textLayer } */
@@ -196,9 +199,9 @@ function goToPage(index, { top = true } = {}) {
 
 // ---------- thumbnails ----------
 
-/** How many pages the event would play, or null when the PDF was not opened from an event. */
-function playedCount() {
-  return MAX_SLIDES ? slidesToPlay(pages.length, MAX_SLIDES) : null;
+/** The pages the event would play ({ first, last, count }), or null when the PDF was not opened from an event. */
+function playedRange() {
+  return MAX_SLIDES ? playedPages(RANGE, pages.length, MAX_SLIDES) : null;
 }
 
 /**
@@ -213,13 +216,13 @@ function buildTiles(container, width, onPick) {
       drawThumb(Number(e.target.dataset.page), e.target.querySelector('.thumb-box'), width);
     }
   }, { root: container, rootMargin: '300px 0px' });
-  const played = playedCount();
+  const played = playedRange();
   container.replaceChildren(...pages.map((p, i) => {
     const item = document.createElement('button');
-    const beyond = played !== null && i >= played;
+    const beyond = played !== null && (i + 1 < played.first || i + 1 > played.last);
     item.className = `thumb-item${beyond ? ' beyond' : ''}`;
     item.dataset.page = String(i);
-    item.title = beyond ? `Page ${i + 1}: beyond Max slides, so it is not played` : `Go to page ${i + 1}`;
+    item.title = beyond ? `Page ${i + 1}: outside the pages this event plays` : `Go to page ${i + 1}`;
     const box = document.createElement('div');
     box.className = 'thumb-box';
     box.style.width = `${width}px`;
@@ -257,11 +260,17 @@ function setView(view) {
         goToPage(i);
       });
       gridBuilt = true;
-      const played = playedCount();
+      const played = playedRange();
       const n = pages.length;
-      $('gridInfo').textContent = played !== null && played < n
-        ? `${n} pages · this event plays the first ${played}; ${n - played} more ${n - played === 1 ? 'is' : 'are'} not played`
-        : `${n} page${n === 1 ? '' : 's'}${played !== null ? ' · all of them play in this event' : ''}`;
+      const total = `${n} page${n === 1 ? '' : 's'}`;
+      const rest = played ? n - played.count : 0;
+      if (!played) $('gridInfo').textContent = total;
+      else if (rest === 0) $('gridInfo').textContent = `${total} · all of them play in this event`;
+      else if (played.count === 0) $('gridInfo').textContent = `${total} · none of them play: this deck's page range starts past the end`;
+      else {
+        const which = played.first === 1 ? `the first ${played.count}` : describePages(played);
+        $('gridInfo').textContent = `${total} · this event plays ${which}; ${rest} more ${rest === 1 ? 'is' : 'are'} not played`;
+      }
     }
     renderFind(); // match counts on the tiles
     markCurrentTiles();

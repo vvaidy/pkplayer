@@ -3,6 +3,7 @@
 import { debug } from '../lib/debug.js';
 import { PHASE, PlayerController } from '../lib/player-controller.js';
 import { deckLabel } from '../lib/deck-label.js';
+import { playedPages } from '../lib/page-range.js';
 import {
   SPEEDRUN_DRAW_TIMEOUT_MS, SPEEDRUN_PLAY_SCREEN_MS, parseSpeedrun, speedrunReport, speedrunSlideSeconds,
 } from '../lib/speedrun.js';
@@ -25,6 +26,8 @@ const SPEEDRUN = parseSpeedrun(params.get('speedrun'));
 
 let ev = null;
 let docs = [];
+/** For each deck, the PDF page (1-based) shown as its first slide. Usually 1; more when the deck skips its opening pages. */
+let firstPages = [];
 let controller = null;
 let lastDeckReported = null;
 /** "deck:slide" -> Promise<HTMLCanvasElement|null> */
@@ -49,7 +52,7 @@ function getSlide(d, s) {
   if (!slideCache.has(k)) {
     const doc = docs[d];
     const p = doc
-      ? renderPage(doc, s + 1, window.innerWidth, window.innerHeight).catch((err) => {
+      ? renderPage(doc, (firstPages[d] ?? 1) + s, window.innerWidth, window.innerHeight).catch((err) => {
         debug('player', `render failed deck ${d} slide ${s + 1}`, err);
         return null;
       })
@@ -87,6 +90,7 @@ async function showCurrent() {
     $('stage').replaceChildren(err);
   }
   document.body.dataset.shown = want;
+  document.body.dataset.pdfPage = String((firstPages[v.deckIndex] ?? 1) + v.slideIndex); // the PDF's own page number
   // Pre-render the next slide so advancing is instant.
   if (next) getSlide(next.deckIndex, next.slideIndex);
 }
@@ -334,8 +338,11 @@ async function init() {
     $('speedBanner').textContent = `SPEED TEST ${SPEEDRUN}× — not a real run`;
     $('speedBanner').hidden = false;
   }
+  // Each deck plays its own page range (the whole deck by default), capped by Max slides.
+  const ranges = ev.items.map((it, i) => playedPages(it, pageCounts[i], ev.maxSlides));
+  firstPages = ranges.map((r) => r.first);
   controller = new PlayerController({
-    pageCounts,
+    pageCounts: ranges.map((r) => r.count),
     timePerSlide: SPEEDRUN ? speedrunSlideSeconds(ev.timePerSlide, SPEEDRUN) : ev.timePerSlide,
     maxSlides: ev.maxSlides,
     startDeck: startDeckIndex,

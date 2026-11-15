@@ -41,6 +41,8 @@ If you have PK Player yourself, **File → Practice a PDF…** plays your PDF wi
 
 ## For organisers
 
+- If a deck arrives with a title page or a closing page you don't want timed, you don't need to ask for a new file: set the row's **pages** boxes, for example `2` – `21`. See [Page range](03-editor.md#page-range).
+
 - Type each presenter's name and talk title into the deck's row; the player shows them on the Play screen before the talk. If you leave both empty it shows the file name, so naming files with the presenter's name (e.g. `03-asha-tiny-gardens.pdf`) still helps.
 - PK Player pre-fills those fields from the PDF's Title and Author properties when they look real. Presenters can set them in their slide software's document properties before exporting, but always check the result yourself.
 - Drop each deck into your event when it arrives and look for yellow badges (**only first 20 play**, **only 17 slides**, **4:3, most are 16:9**) or the red **Unreadable PDF**. The summary line counts them: **2 decks need a look**.

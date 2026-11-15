@@ -130,6 +130,9 @@
 .who-sep { flex: none; color: var(--text-faint); font-size: 12px; }
 .who-sep + .who-input { margin-left: 0; }
 .who-input::placeholder { color: var(--text-faint); }
+/* Page range: "pages [1] – [end]" after the name fields. */
+.range { display: flex; align-items: center; gap: 2px; flex: none; color: var(--text-faint); font-size: 12px; cursor: text; }
+.range .range-input { margin-left: 0; min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
 .who-input:hover { border-color: var(--border); }
 .who-input:focus { border-color: var(--accent); background: var(--bg); }
 .info .detail { font-size: 12px; color: var(--text-dim); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }

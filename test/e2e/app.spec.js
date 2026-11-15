@@ -768,6 +768,93 @@ test('reader: a deck opens with every page, thumbnails, zoom, selectable text an
   await app.close();
 });
 
+test('editor: a deck can play a page range, and counts, warnings and the reader follow it', async () => {
+  const { app, editor } = await launch();
+  // 1 s per slide, 4 slides max, Custom format: bravo has 25 pages, alpha 5.
+  await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('alpha-5-slides.pdf')] });
+  const row = editor.locator('.row').first();
+  const first = row.locator('.range-input.firstPage');
+  const last = row.locator('.range-input.lastPage');
+  const badges = () => row.locator('.badge').allTextContents();
+  const set = async (input, value) => {
+    await input.fill(value);
+    await input.press('Enter');
+  };
+
+  // No range: from page 1, capped by Max slides, exactly as before.
+  await expect(first).toHaveValue('');
+  await expect(last).toHaveValue('');
+  expect(await badges()).toEqual(['25 pages', 'only first 4 play', '0:04']);
+  await expect(editor.locator('#summary')).toContainText('8 slides');
+
+  // Start at page 3: still capped at 4 slides, and the badge names the pages.
+  await set(first, '3');
+  await expect(row.locator('.badge.warn')).toHaveText(['only pages 3–6 play']);
+  await expect(editor.locator('#summary')).toContainText('8 slides');
+
+  // Stop at page 5: three pages, under the cap, so it is information and not a warning.
+  await set(last, '5');
+  await expect.poll(badges).toEqual(['25 pages', 'plays pages 3–5', '0:03']);
+  await expect(editor.locator('#summary')).toContainText('7 slides');
+  await expect(editor.locator('#summary .attention')).toHaveText('1 deck needs a look'); // only the 5-page deck now
+
+  // Bad values are refused with a message and the field goes back.
+  await set(first, 'abc');
+  await expect(editor.locator('.toast.error').last()).toContainText('First page must be a whole number');
+  await expect(first).toHaveValue('3');
+  await set(last, '2');
+  await expect(editor.locator('.toast.error').last()).toContainText('must not be before the first page');
+  await expect(last).toHaveValue('5');
+  await set(first, '0');
+  await expect(first).toHaveValue('3');
+  // Typing in the fields never triggers the row's own keys (Delete removes a row, Enter plays).
+  await first.press('Delete');
+  await first.press('Backspace');
+  await first.press('Escape');
+  await expect(editor.locator('.row')).toHaveCount(2);
+  await expect(first).toHaveValue('3');
+  expect(app.windows().length).toBe(1);
+
+  // A range that starts past the end plays nothing, and says so in red.
+  await set(last, '');
+  await set(first, '30');
+  await expect(row.locator('.badge.err')).toHaveText('starts at page 30, past the end — nothing plays');
+  await expect(editor.locator('#summary')).toContainText('4 slides');
+  await expect(editor.locator('#summary .attention')).toHaveText('2 decks need a look');
+
+  // Page 1 is the same as no first page; clearing both restores the plain deck.
+  await set(first, '1');
+  await expect(first).toHaveValue('');
+  await expect.poll(badges).toEqual(['25 pages', 'only first 4 play', '0:04']);
+
+  // The speedrun estimate follows the range too.
+  await set(first, '2');
+  await set(last, '3');
+  await editor.click('#speedrunOpen');
+  await expect(editor.locator('#speedChoices label').nth(1)).toContainText('for 6 slides'); // 2 + 4
+  await editor.click('#speedCancel');
+
+  // The range survives a restart...
+  await app.close();
+  const { app: app2, editor: editor2 } = await launch();
+  const row2 = editor2.locator('.row').first();
+  await expect(row2.locator('.range-input.firstPage')).toHaveValue('2');
+  await expect(row2.locator('.range-input.lastPage')).toHaveValue('3');
+  await expect(row2.locator('.badge').nth(1)).toHaveText('plays pages 2–3');
+
+  // ...and the reader marks every page outside it as not played.
+  const [reader] = await Promise.all([app2.waitForEvent('window'), row2.locator('.read').click()]);
+  await reader.waitForSelector('body[data-ready="1"]');
+  await reader.click('#toggleGrid');
+  await expect(reader.locator('#gridInfo')).toHaveText('25 pages · this event plays pages 2–3; 23 more are not played');
+  await expect(reader.locator('#gridTiles .thumb-item.beyond')).toHaveCount(23);
+  await expect(reader.locator('#gridTiles .thumb-item').nth(0)).toHaveClass(/beyond/);
+  await expect(reader.locator('#gridTiles .thumb-item').nth(1)).not.toHaveClass(/beyond/);
+  await expect(reader.locator('#gridTiles .thumb-item').nth(2)).not.toHaveClass(/beyond/);
+  await expect(reader.locator('#gridTiles .thumb-item').nth(3)).toHaveClass(/beyond/);
+  await app2.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });
@@ -1177,6 +1264,43 @@ test('player: the progress bar and slide counter show on white, grey and black s
     await player.keyboard.press('n'); // next deck (or the end)
   }
   await expect(player.locator('#ended')).toBeVisible();
+  const closed = player.waitForEvent('close');
+  await player.keyboard.press('Escape');
+  await closed;
+  await app.close();
+});
+
+test('player: a deck with a page range starts and stops on the chosen PDF pages', async () => {
+  const { app, editor } = await launch();
+  await setupEvent(app, editor, { time: '2', max: '4', files: [fx('bravo-25-slides.pdf'), fx('alpha-5-slides.pdf')] });
+  const row = editor.locator('.row').first();
+  await row.locator('.range-input.firstPage').fill('3');
+  await row.locator('.range-input.firstPage').press('Enter');
+  await row.locator('.range-input.lastPage').fill('5');
+  await row.locator('.range-input.lastPage').press('Enter');
+  await expect(row.locator('.badge').nth(1)).toHaveText('plays pages 3–5');
+
+  const player = await openPlayer(app, editor);
+  // Three slides, and the picture behind the Play button is already page 3.
+  await expect(player.locator('#deckLabel')).toHaveText('PDF 1 of 2 · bravo-25-slides.pdf · 3 slides');
+  await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '3');
+  await player.keyboard.press('Space');
+  await expect(player.locator('#counter')).toHaveText('1 / 3');
+  await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '3');
+  await player.keyboard.press('ArrowRight');
+  await expect(player.locator('#counter')).toHaveText('2 / 3');
+  await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '4');
+  await player.keyboard.press('ArrowRight');
+  await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '5');
+  // The timer, not a key, ends the deck after its last page: the next deck waits on Play at ITS page 1.
+  await expect(player.locator('body')).toHaveAttribute('data-deck', '1', { timeout: 6000 });
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'waiting');
+  await expect(player.locator('#deckLabel')).toHaveText('PDF 2 of 2 · alpha-5-slides.pdf · 4 slides');
+  await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '1');
+  // Going back from slide 1 of a ranged deck never shows a page before the range.
+  await player.keyboard.press('Space');
+  await player.keyboard.press('ArrowLeft');
+  await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '1');
   const closed = player.waitForEvent('close');
   await player.keyboard.press('Escape');
   await closed;

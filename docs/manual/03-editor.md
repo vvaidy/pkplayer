@@ -41,7 +41,7 @@ Under the settings, the summary shows **PDFs · slides that will actually play �
 
 ## Playlist
 
-Each row shows, from left: drag handle, position, first-page thumbnail, file name, two optional text fields, and badges.
+Each row shows, from left: drag handle, position, first-page thumbnail, file name, optional presenter, title and page-range fields, and badges.
 
 ### Presenter and talk title
 
@@ -52,12 +52,27 @@ Under the file name each row has two fields, **Presenter** and **Talk title**. B
 - When you add a PDF, PK Player fills these in from the PDF's own Title and Author properties if they look like real ones. Placeholders such as "PowerPoint Presentation" or "Microsoft Office User", account-style names such as `jsmith42`, and titles that just repeat the file name are ignored. **Check what was filled in**: it comes from the presenter's software, and it will be on the big screen.
 - Defaults are only applied when a PDF is added. Clearing or changing a field is never undone later.
 
+### Page range
+
+After the name fields, each row has **pages [ 1 ] – [ end ]**: the first and last page of the PDF that this deck plays. Leave both empty and the deck plays from page 1, as it always has.
+
+- **Skip a title page:** type `2` in the first box. The deck then starts at page 2.
+- **Drop a closing page:** type the last page you want in the second box.
+- **Max slides still applies.** With Max slides at 20, a first page of `2` plays pages 2–21, even if the PDF is longer.
+- The file is never changed. The range is a setting on this row, so the same PDF can play differently in another event.
+- Press **Enter** to save, **Esc** to put back what was there. Empty a box to remove that limit.
+- A row with a range shows a badge such as `plays pages 2–21`. The [reader](#reader) dims the pages outside it.
+
+Values that make no sense are refused with a message: anything that is not a whole number, or a last page before the first. A first page beyond the end of the PDF is accepted but shown in red, because nothing would play.
+
 ### Badges
 
 | Badge | Meaning |
 | --- | --- |
 | `20 pages` | Pages in the PDF. |
-| `only first 20 play` (yellow) | The PDF has more pages than Max slides; the rest are skipped. |
+| `only first 20 play` (yellow) | The PDF has more pages than Max slides; the rest are skipped. With a page range it reads `only pages 2–21 play`. |
+| `plays pages 2–21` | The deck has a [page range](#page-range) and all of it fits within Max slides. |
+| `starts at page 30, past the end — nothing plays` (red) | The page range begins after the PDF's last page. The player skips this deck. |
 | `only 17 slides` (yellow) | The PDF has fewer pages than Max slides, so this deck will end early. Shown only when Format is PechaKucha or Ignite. Under Custom, Max slides is just an upper limit and short decks are normal. |
 | `4:3, most are 16:9` (yellow) | The page shape differs from most other decks in this event, so this deck will show black bars that the others don't. |
 | `6:40` | How long this deck will run. |
@@ -124,7 +139,7 @@ The reader opens a PDF in an ordinary window for reading, not presenting. Use it
 Things to know:
 
 - The reader never changes a file. There is nothing to save.
-- Every page of the PDF is shown, including pages beyond Max slides. When you open a deck from the playlist, those extra pages are dimmed and labelled **not played** in the thumbnails and the grid, and the grid says how many the event will play. A PDF opened from the File menu belongs to no event, so nothing is marked.
+- Every page of the PDF is shown, including pages the event will not play: those beyond Max slides and those outside the deck's [page range](#page-range). When you open a deck from the playlist, those pages are dimmed and labelled **not played** in the thumbnails and the grid, and the grid says which pages the event will play. A PDF opened from the File menu belongs to no event, so nothing is marked.
 - Search finds text that is real text in the PDF. Words that are part of a picture are not found, and a phrase that breaks across two lines is not found as one match.
 - You can have several reader windows open. They close when you close the main window.
 

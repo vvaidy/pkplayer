@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { debug } from '../lib/debug.js';
 import { DEFAULT_MAX_SLIDES, DEFAULT_TIME_PER_SLIDE } from '../lib/player-controller.js';
+import { parsePageNumber } from '../lib/page-range.js';
 import { CUSTOM_THEME_PREFIX, DEFAULT_THEME_ID, THEMES, isThemeId, normalizeTheme, themeById } from '../lib/themes.js';
 
 export const SCHEMA_VERSION = 1;
@@ -39,6 +40,15 @@ function clampNumber(value, { min, max }, label, { integer = false } = {}) {
 /** Optional one-line text (presenter, talk title): trimmed, capped, "" when absent. */
 function cleanText(value) {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, LIMITS.nameLength) : '';
+}
+
+/** A stored first/last page: a valid page number, or null when missing or damaged. Never throws. */
+function storedPage(value) {
+  try {
+    return parsePageNumber(value);
+  } catch {
+    return null;
+  }
 }
 
 function cleanName(name, fallback) {
@@ -108,6 +118,8 @@ export class Store {
             pageCount: Number.isInteger(it.pageCount) ? it.pageCount : null,
             presenter: cleanText(it.presenter), // absent in files written before 1.1
             title: cleanText(it.title),
+            firstPage: storedPage(it.firstPage), // null = from page 1; absent in files written before 1.3
+            lastPage: storedPage(it.lastPage), // null = to the end
           })),
         createdAt: e.createdAt || new Date().toISOString(),
       }));
@@ -237,7 +249,7 @@ export class Store {
         const id = newId();
         const file = `${id}.pdf`;
         fs.copyFileSync(p, this.libraryPath(file));
-        added.push({ id, name: cleanName(path.basename(p), 'Untitled.pdf'), file, pageCount: null, presenter: '', title: '' });
+        added.push({ id, name: cleanName(path.basename(p), 'Untitled.pdf'), file, pageCount: null, presenter: '', title: '', firstPage: null, lastPage: null });
         debug('store', `imported ${p} -> ${file}`);
       } catch (err) {
         debug('store', `failed to import ${p}`, err);
@@ -286,25 +298,36 @@ export class Store {
   }
 
   /**
-   * Set a deck's presenter name and/or talk title. Both are optional text; "" clears one.
-   * Anything else in the patch is ignored.
+   * Set a deck's presenter name, talk title, and/or the first and last page it plays.
+   * Presenter and title are optional text; "" clears one. firstPage and lastPage are whole
+   * page numbers; null or "" clears one (back to "from page 1" / "to the end").
+   * Anything else in the patch is ignored. Nothing is saved if any value is refused.
    */
   updateItem(eventId, itemId, patch = {}) {
     const ev = this.#event(eventId);
     const it = ev.items.find((x) => x.id === itemId);
     if (!it) throw new StoreError(`Playlist item not found: ${itemId}`);
-    let changed = false;
+    // Work out every new value first, so a refused value leaves the deck completely unchanged.
+    const next = { presenter: it.presenter, title: it.title, firstPage: it.firstPage, lastPage: it.lastPage };
     for (const key of ['presenter', 'title']) {
       if (!(key in (patch || {}))) continue;
       if (patch[key] != null && typeof patch[key] !== 'string') {
         throw new StoreError(`${key === 'presenter' ? 'Presenter' : 'Talk title'} must be text`);
       }
-      const value = cleanText(patch[key]);
-      if (it[key] !== value) {
-        it[key] = value;
-        changed = true;
-      }
+      next[key] = cleanText(patch[key]);
     }
+    try {
+      if ('firstPage' in (patch || {})) next.firstPage = parsePageNumber(patch.firstPage, 'First page');
+      if ('lastPage' in (patch || {})) next.lastPage = parsePageNumber(patch.lastPage, 'Last page');
+    } catch (err) {
+      throw new StoreError(err.message);
+    }
+    if (next.firstPage === 1) next.firstPage = null; // "from page 1" is the same as not set
+    if (next.firstPage !== null && next.lastPage !== null && next.lastPage < next.firstPage) {
+      throw new StoreError(`Last page (${next.lastPage}) must not be before the first page (${next.firstPage})`);
+    }
+    const changed = Object.keys(next).some((key) => it[key] !== next[key]);
+    Object.assign(it, next);
     if (changed) this.#save();
     return this.#clone(it);
   }
@@ -379,7 +402,7 @@ export class Store {
       name: `Practice: ${name}`,
       timePerSlide: inRange(timePerSlide, LIMITS.timePerSlide) ? Number(timePerSlide) : DEFAULT_TIME_PER_SLIDE,
       maxSlides: inRange(maxSlides, LIMITS.maxSlides) && Number.isInteger(Number(maxSlides)) ? Number(maxSlides) : DEFAULT_MAX_SLIDES,
-      items: [{ id, name, file, pageCount: null, presenter: '', title: '' }],
+      items: [{ id, name, file, pageCount: null, presenter: '', title: '', firstPage: null, lastPage: null }],
       createdAt: new Date().toISOString(),
     };
     this.#removePracticeFiles(file); // the previous practice deck, if any
