@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { PDFDocument, rgb } from 'pdf-lib';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FIXTURES = path.join(ROOT, 'test/fixtures');
@@ -894,6 +895,101 @@ test('speedrun: an unreadable deck and skipping ahead are reported, not passed',
   await expect(player.locator('.ended-title')).toHaveText('Speedrun finished with problems');
   await expect(player.locator('#speedReportSummary')).toContainText('1 of 2 decks opened');
   await expect(player.locator('#speedReportLines li').first()).toContainText('“charlie-3-slides.pdf” could not be opened');
+  const closed = player.waitForEvent('close');
+  await player.keyboard.press('Escape');
+  await closed;
+  await app.close();
+});
+
+test('player: the progress bar and slide counter show on white, grey and black slides', async () => {
+  const { app, editor } = await launch();
+  // Slides shaped exactly like this display, in flat white, grey and black. A 16:9 slide on a
+  // 16:10 laptop leaves a black band under the slide, and the bar would sit on that band, so
+  // ordinary test decks would never put the bar on top of a white slide.
+  const display = await app.evaluate(({ screen }) => screen.getPrimaryDisplay().size);
+  const decks = [['white', 1], ['grey', 0.5], ['black', 0]];
+  const files = [];
+  for (const [name, level] of decks) {
+    const doc = await PDFDocument.create();
+    for (let i = 0; i < 2; i += 1) {
+      doc.addPage([display.width, display.height]).drawRectangle({
+        x: 0, y: 0, width: display.width, height: display.height, color: rgb(level, level, level),
+      });
+    }
+    const file = path.join(dataDir, `flat-${name}.pdf`);
+    fs.writeFileSync(file, await doc.save());
+    files.push(file);
+  }
+  await setupEvent(app, editor, { time: '10', max: '2', files });
+  const player = await openPlayer(app, editor);
+
+  /**
+   * Read real pixels from the player window: the average brightness (0-1, as the eye weighs it) of
+   * small patches inside the filled and unfilled parts of the bar, the slide just above the bar,
+   * and the counter chip. Measured by Electron itself, so it is what is actually on screen.
+   */
+  const measure = () => app.evaluate(async ({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.getTitle().includes('Presenting'));
+    const [width, height] = win.getContentSize();
+    const strip = 60;
+    const img = await win.webContents.capturePage({ x: 0, y: height - strip, width, height: strip });
+    const buf = img.toBitmap();
+    const scale = Math.sqrt(buf.length / 4 / (width * strip));
+    const W = Math.round(width * scale);
+    const lum = (x, y, w, h) => { // patch in window points, y measured up from the bottom edge
+      let sum = 0;
+      let n = 0;
+      for (let py = Math.round((strip - y - h) * scale); py < Math.round((strip - y) * scale); py += 1) {
+        for (let px = Math.round(x * scale); px < Math.round((x + w) * scale); px += 1) {
+          const i = (py * W + px) * 4; // BGRA
+          const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+          sum += 0.0722 * lin(buf[i]) + 0.7152 * lin(buf[i + 1]) + 0.2126 * lin(buf[i + 2]);
+          n += 1;
+        }
+      }
+      return sum / n;
+    };
+    return {
+      filled: lum(width * 0.03, 1, 30, 4), // the bar is 6 points tall; stay inside it
+      unfilled: lum(width * 0.6, 1, 30, 4),
+      slide: lum(width * 0.6, 12, 30, 20),
+      chip: lum(width - 30, 17, 4, 2), // a corner of the counter chip, clear of the digits
+    };
+  });
+  const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+
+  const expectedSlide = { white: [0.9, 1.01], grey: [0.15, 0.3], black: [-0.01, 0.01] };
+  for (const [deck, name] of [[0, 'white'], [1, 'grey'], [2, 'black']]) {
+    await expect(player.locator('body')).toHaveAttribute('data-deck', String(deck));
+    await player.keyboard.press('Space'); // start this deck
+    await expect(player.locator('body')).toHaveAttribute('data-phase', 'playing');
+    await expect(player.locator('body')).toHaveAttribute('data-shown', `${deck}:0`);
+    await player.waitForTimeout(2500); // 10 s slide: the bar is about a quarter full
+    const playing = await measure();
+    await player.screenshot({ path: path.join(SHOTS, `progress-on-${name}.png`) });
+    await player.keyboard.press('Space'); // pause: the fill turns amber
+    await expect(player.locator('body')).toHaveAttribute('data-phase', 'paused');
+    await player.waitForTimeout(900); // let the "Paused" flash clear
+    const paused = await measure();
+    console.log(`progress bar on ${name}: filled/unfilled ${ratio(playing.filled, playing.unfilled).toFixed(1)}, `
+      + `bar/slide ${Math.max(ratio(playing.filled, playing.slide), ratio(playing.unfilled, playing.slide)).toFixed(1)}, `
+      + `paused ${ratio(paused.filled, paused.unfilled).toFixed(1)}, counter chip/slide ${ratio(playing.chip, playing.slide).toFixed(1)}`);
+
+    // First make sure this really measured the slide and not a letterbox band.
+    expect(playing.slide, `${name}: slide brightness`).toBeGreaterThan(expectedSlide[name][0]);
+    expect(playing.slide, `${name}: slide brightness`).toBeLessThan(expectedSlide[name][1]);
+    // You can see how far the slide has run: the filled and unfilled parts differ clearly.
+    expect(ratio(playing.filled, playing.unfilled), `${name}: filled vs unfilled`).toBeGreaterThan(3);
+    // You can see the bar at all: at least one of its parts stands out from the slide.
+    expect(Math.max(ratio(playing.filled, playing.slide), ratio(playing.unfilled, playing.slide)), `${name}: bar vs slide`).toBeGreaterThan(3);
+    // The same holds while paused.
+    expect(ratio(paused.filled, paused.unfilled), `${name}: paused fill vs unfilled`).toBeGreaterThan(2.5);
+    // The counter's digits are light on a chip that is never bright, whatever the slide.
+    expect(playing.chip, `${name}: counter chip is dark enough for light digits`).toBeLessThan(0.2);
+
+    await player.keyboard.press('n'); // next deck (or the end)
+  }
+  await expect(player.locator('#ended')).toBeVisible();
   const closed = player.waitForEvent('close');
   await player.keyboard.press('Escape');
   await closed;

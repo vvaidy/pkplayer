@@ -4,22 +4,26 @@ body.player.idle { cursor: none; }
 .stage { position: fixed; inset: 0; display: grid; place-items: center; }
 .stage canvas { display: block; }
 
-/* Discreet translucent progress bar across the bottom. */
+/* Progress bar across the bottom. It must show on ANY slide, so it is two-tone: a dark track
+   (visible on light slides) with a light hairline above it (visible on dark slides), and a light
+   fill that always contrasts with the track. Never make either part depend on the slide's color. */
 .progress {
   position: fixed; left: 0; right: 0; bottom: 0; height: 6px; z-index: 10;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.3);
 }
 .progress-fill {
   height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0);
-  background: rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.92);
   will-change: transform;
 }
-.paused .progress-fill { background: rgba(255, 200, 80, 0.5); }
+.paused .progress-fill { background: rgba(255, 196, 64, 0.95); }
 
+/* Slide counter: light text on its own dark chip, for the same reason. */
 .counter {
-  position: fixed; right: 14px; bottom: 14px; z-index: 10;
-  font: 600 13px/1 var(--font); color: rgba(255, 255, 255, 0.28); font-variant-numeric: tabular-nums;
-  letter-spacing: 0.5px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  position: fixed; right: 12px; bottom: 14px; z-index: 10; padding: 4px 7px; border-radius: 6px;
+  font: 600 13px/1 var(--font); color: rgba(255, 255, 255, 0.9); font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px; background: rgba(0, 0, 0, 0.62);
 }
 
 .pause-badge {

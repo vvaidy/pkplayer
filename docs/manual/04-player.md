@@ -16,8 +16,8 @@ Shown before every deck. The deck's first slide is blurred behind a large Play b
 
 The slide fills the screen, letterboxed in black if its shape doesn't match the display. Two discreet indicators:
 
-- **Progress bar** — a thin translucent bar along the bottom edge that fills over the slide's time and resets each slide.
-- **Counter** — a faint `3 / 20` in the bottom-right corner: slide number of slides that will play in this deck.
+- **Progress bar** — a thin bar along the bottom edge that fills over the slide's time and resets each slide. It is a light fill on a dark track, so it shows on any slide, white ones included. It turns amber while paused.
+- **Counter** — a small `3 / 20` chip in the bottom-right corner: slide number of slides that will play in this deck.
 
 After the deck's last playable slide (Max slides, or the last page if fewer), the next deck appears on its Play button.
 
