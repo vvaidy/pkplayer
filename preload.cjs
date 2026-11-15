@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('pk', {
   pickPdfs: () => call('dialog:openPdfs'),
   openPlayer: (eventId, startItemId) => call('player:open', eventId, startItemId),
   practice: (opts) => call('practice:start', opts),
+  readItem: (eventId, itemId) => call('reader:openItem', eventId, itemId),
+  readFile: () => call('reader:openFile'),
   speedrun: (eventId, factor) => call('player:speedrun', eventId, factor),
   closePlayer: () => call('player:close'),
   enterFullscreen: () => call('player:fullscreen'),

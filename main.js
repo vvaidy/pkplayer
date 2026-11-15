@@ -2,9 +2,10 @@
 
 import { app, BrowserWindow, dialog, ipcMain, Menu, powerSaveBlocker, protocol, screen, shell } from 'electron';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PRACTICE_EVENT_ID, Store } from './src/main/store.js';
+import { PRACTICE_EVENT_ID, Store, isPdfFile } from './src/main/store.js';
 import { buildHelpMenu } from './src/main/help-menu.js';
 import { exportTheme, isCustomThemeId, parseThemeFile, themeVars } from './src/lib/themes.js';
 import { parseSpeedrun } from './src/lib/speedrun.js';
@@ -15,6 +16,7 @@ const APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.PKPLAY_DATA_DIR || path.join(app.getPath('userData'), 'data');
 const EDITOR_URL = 'app://bundle/src/renderer/editor.html';
 const PLAYER_URL = 'app://bundle/src/renderer/player.html';
+const READER_URL = 'app://bundle/src/renderer/reader.html';
 const DEBUG_QUERY = process.env.PKPLAY_DEBUG === '1' ? '&debug=1' : '';
 const THEME_FILE_MAX_BYTES = 512 * 1024; // theme files are a few KB; refuse anything that is clearly not one
 const MIME = {
@@ -43,10 +45,15 @@ let sleepBlockerId = null;
 /** eventId -> itemId to resume from when playback was stopped mid-event. */
 const resumePoints = new Map();
 let playerSession = null; // { eventId, itemId }
+/** Open reader windows. */
+const readerWins = new Set();
+/** token -> absolute path of a PDF the user picked to read. Only these outside files are ever served. */
+const externalFiles = new Map();
 
 // ---------- app:// protocol ----------
 // app://bundle/<path>          -> files inside the app
 // app://bundle/library/<file>  -> imported PDFs in the user's library
+// app://bundle/external/<token> -> a PDF the user chose with the Open dialog, for the reader
 
 function resolveAppUrl(urlString) {
   const url = new URL(urlString);
@@ -54,6 +61,9 @@ function resolveAppUrl(urlString) {
   const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
   if (rel.startsWith('library/')) {
     return store.libraryPath(rel.slice('library/'.length));
+  }
+  if (rel.startsWith('external/')) {
+    return externalFiles.get(rel.slice('external/'.length)) || null; // unknown tokens get nothing
   }
   const full = path.normalize(path.join(APP_ROOT, rel));
   return full.startsWith(APP_ROOT + path.sep) ? full : null;
@@ -134,6 +144,7 @@ function createEditorWindow() {
   editorWin.on('closed', () => {
     editorWin = null;
     if (playerWin) playerWin.close();
+    for (const w of [...readerWins]) w.close();
   });
   // Dropping a file outside the drop handlers must never navigate the editor away.
   editorWin.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -141,6 +152,35 @@ function createEditorWindow() {
     if (url.startsWith('https://')) shell.openExternal(url);
     return { action: 'deny' };
   });
+}
+
+/**
+ * Open a PDF in a reader window: an ordinary, resizable window for reading, not presenting.
+ * @param {string} src "library/<file>" or "external/<token>"
+ * @param {string} name shown in the title bar
+ */
+function openReader(src, name) {
+  const win = new BrowserWindow({
+    width: 1100,
+    height: 820,
+    minWidth: 640,
+    minHeight: 420,
+    title: `${name} — PK Player Reader`,
+    backgroundColor: themeBackground(),
+    show: false,
+    webPreferences: secureWebPrefs,
+  });
+  readerWins.add(win);
+  win.loadURL(`${READER_URL}?${new URLSearchParams({ src, name, ...themeParams() })}${DEBUG_QUERY}`);
+  win.once('ready-to-show', () => win.show());
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' })); // links inside a PDF open nothing
+  win.on('closed', () => {
+    readerWins.delete(win);
+    if (src.startsWith('external/')) externalFiles.delete(src.slice('external/'.length));
+  });
+  debug('reader', `opened ${src} (${name})`);
+  return true;
 }
 
 /**
@@ -326,6 +366,26 @@ function registerIpc() {
     return res.canceled ? [] : res.filePaths;
   });
   handle('player:open', (eventId, startItemId) => openPlayer(eventId, startItemId));
+  // Reader: one of an event's decks...
+  handle('reader:openItem', (eventId, itemId) => {
+    const item = store.getEvent(eventId).items.find((it) => it.id === itemId);
+    if (!item) throw new Error('That deck is no longer in the playlist.');
+    return openReader(`library/${item.file}`, item.name);
+  });
+  // ...or any PDF the user picks. Returns false if the file dialog was cancelled.
+  handle('reader:openFile', async () => {
+    const res = await dialog.showOpenDialog(editorWin, {
+      title: 'Open PDF in Reader',
+      properties: ['openFile'],
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (res.canceled || !res.filePaths.length) return false;
+    const file = res.filePaths[0];
+    if (!isPdfFile(file)) throw new Error('Not a PDF file');
+    const token = crypto.randomUUID();
+    externalFiles.set(token, file);
+    return openReader(`external/${token}`, path.basename(file));
+  });
   // Speedrun test: the whole event from deck 1, fast. Only the three fixed speeds are accepted.
   handle('player:speedrun', (eventId, factor) => {
     const speedrun = parseSpeedrun(factor);
@@ -374,6 +434,7 @@ function buildMenu() {
       submenu: [
         { label: 'New Event', accelerator: 'CmdOrCtrl+N', click: () => editorWin?.webContents.send('menu:newEvent') },
         { label: 'Add PDFs…', accelerator: 'CmdOrCtrl+O', click: () => editorWin?.webContents.send('menu:addPdfs') },
+        { label: 'Open PDF in Reader…', accelerator: 'CmdOrCtrl+Shift+O', click: () => editorWin?.webContents.send('menu:openReader') },
         { type: 'separator' },
         { label: 'Practice a PDF…', accelerator: 'CmdOrCtrl+Shift+P', click: () => editorWin?.webContents.send('menu:practice') },
         // No keyboard shortcut on purpose: a speedrun should never start by accident.

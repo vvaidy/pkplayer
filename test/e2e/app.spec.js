@@ -581,6 +581,142 @@ test('editor: Speedrun test asks first, offers only 5×, 10× and 20×, and cann
   await app.close();
 });
 
+test('reader: a deck opens with every page, thumbnails, zoom, selectable text and search', async () => {
+  const { app, editor } = await launch();
+  await setupEvent(app, editor, { files: [fx('alpha-5-slides.pdf'), fx('bravo-25-slides.pdf')] });
+  const openReader = async (trigger) => {
+    const [win] = await Promise.all([app.waitForEvent('window'), trigger()]);
+    await win.waitForSelector('body[data-ready="1"]');
+    return win;
+  };
+
+  const reader = await openReader(() => editor.locator('.row').nth(1).locator('.read').click());
+  expect(await reader.title()).toBe('bravo-25-slides.pdf — PK Player Reader');
+  await expect(reader.locator('#docName')).toHaveText('bravo-25-slides.pdf');
+  await expect(reader.locator('html')).toHaveAttribute('data-theme', 'midnight-teal');
+
+  // Every page is there, not just the 4 this event would play.
+  await expect(reader.locator('#pageCount')).toHaveText('/ 25');
+  await expect(reader.locator('.page')).toHaveCount(25);
+  await expect(reader.locator('.thumb-item')).toHaveCount(25);
+  await expect(reader.locator('.page').first()).toHaveAttribute('data-drawn', '1');
+  await expect(reader.locator('.page').first().locator('canvas')).toHaveCount(1);
+  // Only pages near the view are drawn; the far ones wait.
+  await expect(reader.locator('.page').nth(24).locator('canvas')).toHaveCount(0);
+  await expect(reader.locator('.thumb-item').first().locator('canvas')).toHaveCount(1);
+  // The text is real text: it can be selected and copied.
+  await expect(reader.locator('.page').first().locator('.textLayer span').filter({ hasText: 'slide 1 of 25' })).toHaveCount(1);
+
+  // Page navigation: type a number, use the buttons, click a thumbnail, press keys.
+  await expect(reader.locator('#pageInput')).toHaveValue('1');
+  await expect(reader.locator('#prevPage')).toBeDisabled();
+  await reader.fill('#pageInput', '7');
+  await reader.press('#pageInput', 'Enter');
+  await expect(reader.locator('body')).toHaveAttribute('data-page', '7');
+  await expect(reader.locator('.page').nth(6)).toHaveAttribute('data-drawn', '1');
+  await expect(reader.locator('.thumb-item').nth(6)).toHaveClass(/current/);
+  await reader.click('#nextPage');
+  await expect(reader.locator('#pageInput')).toHaveValue('8');
+  await reader.locator('.thumb-item').nth(2).click();
+  await expect(reader.locator('#pageInput')).toHaveValue('3');
+  await reader.locator('#pages').focus();
+  await reader.keyboard.press('ArrowRight');
+  await expect(reader.locator('#pageInput')).toHaveValue('4');
+  await reader.keyboard.press('End');
+  await expect(reader.locator('#pageInput')).toHaveValue('25');
+  await expect(reader.locator('#nextPage')).toBeDisabled();
+  await reader.fill('#pageInput', '999'); // out of range: goes to the last page, never errors
+  await reader.press('#pageInput', 'Enter');
+  await expect(reader.locator('#pageInput')).toHaveValue('25');
+  await reader.keyboard.press('Home');
+  await expect(reader.locator('#pageInput')).toHaveValue('1');
+
+  // Zoom: starts fitted to the window's width; the buttons and menu change it.
+  const pageWidth = () => reader.locator('.page').first().evaluate((el) => el.getBoundingClientRect().width);
+  await expect(reader.locator('#zoomSelect')).toHaveValue('fit-width');
+  const fitted = await pageWidth();
+  const room = await reader.locator('#pages').evaluate((el) => el.clientWidth);
+  expect(fitted).toBeGreaterThan(room - 60);
+  expect(fitted).toBeLessThanOrEqual(room);
+  await reader.selectOption('#zoomSelect', '0.5');
+  await expect(reader.locator('body')).toHaveAttribute('data-zoom', '50%');
+  expect(Math.round(await pageWidth())).toBe(853); // the page is 1280 points wide: 1280 x 96/72 pixels at 100%, half that here
+  await reader.click('#zoomIn');
+  await expect(reader.locator('body')).toHaveAttribute('data-zoom', '75%');
+  await reader.click('#zoomOut');
+  await reader.click('#zoomOut');
+  await expect(reader.locator('body')).toHaveAttribute('data-zoom', '50%'); // stops at the lowest step
+  await reader.selectOption('#zoomSelect', 'fit-page');
+  const box = await reader.locator('#pages').evaluate((el) => el.clientHeight);
+  expect(await reader.locator('.page').first().evaluate((el) => el.getBoundingClientRect().height)).toBeLessThanOrEqual(box);
+  await expect(reader.locator('.page').first()).toHaveAttribute('data-drawn', '1'); // redrawn at the new size
+  // Hiding the thumbnails gives the page more room.
+  await reader.selectOption('#zoomSelect', 'fit-width');
+  const withThumbs = await pageWidth();
+  await reader.click('#toggleThumbs');
+  await expect(reader.locator('#thumbs')).toBeHidden();
+  expect(await pageWidth()).toBeGreaterThan(withThumbs + 100);
+  await reader.click('#toggleThumbs');
+
+  // Search: counts matches, jumps to them, highlights them, and wraps around.
+  await reader.fill('#findInput', 'SLIDE 12 OF 25');
+  await expect(reader.locator('#findCount')).toHaveText('1 of 1');
+  await expect(reader.locator('body')).toHaveAttribute('data-page', '12');
+  await expect(reader.locator('mark.current')).toHaveText('slide 12 of 25');
+  await expect(reader.locator('.thumb-item').nth(11).locator('.hits')).toHaveText('1 match');
+  await reader.fill('#findInput', 'of 25');
+  await expect(reader.locator('#findCount')).toHaveText('12 of 25'); // starts from the page being read
+  await reader.press('#findInput', 'Enter');
+  await expect(reader.locator('#findCount')).toHaveText('13 of 25');
+  await expect(reader.locator('body')).toHaveAttribute('data-page', '13');
+  await reader.press('#findInput', 'Shift+Enter');
+  await reader.click('#findPrev');
+  await expect(reader.locator('#findCount')).toHaveText('11 of 25');
+  for (let i = 0; i < 15; i += 1) await reader.click('#findNext');
+  await expect(reader.locator('#findCount')).toHaveText('1 of 25'); // wrapped past the end
+  await expect(reader.locator('body')).toHaveAttribute('data-page', '1');
+  await expect(reader.locator('mark.current')).toHaveText('of 25'); // highlighted once the page is drawn
+  await expect(reader.locator('.page').first().locator('mark')).toHaveCount(1);
+  await reader.screenshot({ path: path.join(SHOTS, 'reader.png') });
+  await reader.fill('#findInput', 'zebra crossing');
+  await expect(reader.locator('#findCount')).toHaveText('No matches');
+  await expect(reader.locator('mark')).toHaveCount(0);
+  await expect(reader.locator('#findNext')).toBeDisabled();
+  await reader.press('#findInput', 'Escape');
+  await expect(reader.locator('#findCount')).toHaveText('');
+  await expect(reader.locator('#findInput')).toHaveValue('');
+
+  // The reader only ever gets the file it was opened for.
+  expect(await reader.evaluate(() => fetch('app://bundle/external/not-a-real-token').then((r) => r.status))).toBeGreaterThanOrEqual(400);
+
+  // File > Open PDF in Reader: any PDF from disk, without adding it to an event.
+  const clickMenu = (label) => app.evaluate(({ Menu }, l) => {
+    Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === l).click();
+  }, label);
+  await stubOpenDialog(app, [fx('charlie-3-slides.pdf')]);
+  const second = await openReader(() => clickMenu('Open PDF in Reader…'));
+  await expect(second.locator('#pageCount')).toHaveText('/ 3');
+  await expect(second.locator('.page').first()).toHaveAttribute('data-drawn', '1');
+  expect(await second.title()).toBe('charlie-3-slides.pdf — PK Player Reader');
+  expect(await rowNames(editor)).toEqual(['alpha-5-slides.pdf', 'bravo-25-slides.pdf']); // nothing was added
+  expect(fs.readdirSync(path.join(dataDir, 'library')).length).toBe(2); // and nothing was copied
+
+  // Not a PDF: refused with a message, no window.
+  await stubOpenDialog(app, [fx('not-a-pdf.pdf')]);
+  await clickMenu('Open PDF in Reader…');
+  await expect(editor.locator('.toast.error').last()).toContainText('Not a PDF file');
+  expect(app.windows().length).toBe(3);
+
+  // Double-clicking a thumbnail in the playlist opens the reader too.
+  const third = await openReader(() => editor.locator('.row').first().locator('.thumb').dblclick());
+  await expect(third.locator('#pageCount')).toHaveText('/ 5');
+
+  // Reader windows close with the editor.
+  await second.close();
+  expect(app.windows().length).toBe(3);
+  await app.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });

@@ -9,10 +9,19 @@ export function libraryUrl(file) {
   return `app://bundle/library/${encodeURIComponent(file)}`;
 }
 
+/** pdf.js's text layer: invisible, selectable text laid over a rendered page. */
+export const { TextLayer } = pdfjsLib;
+
 /** Open an imported PDF by its library file name. */
-export async function openPdf(file) {
+export function openPdf(file) {
+  return openPdfAt(libraryUrl(file), file);
+}
+
+/** Open a PDF by app:// URL. `label` is only used in log messages. */
+export async function openPdfAt(url, label = url) {
+  const file = label;
   const task = pdfjsLib.getDocument({
-    url: libraryUrl(file),
+    url,
     cMapUrl: `${PDFJS_BASE}cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${PDFJS_BASE}standard_fonts/`,

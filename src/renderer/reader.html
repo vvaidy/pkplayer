@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'">
+  <title>PK Player — Reader</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="reader.css">
+  <script type="module" src="theme.js"></script>
+  <script type="module" src="reader.js"></script>
+</head>
+<body class="reader">
+  <header class="reader-bar">
+    <button id="toggleThumbs" class="tool" title="Show or hide page thumbnails" aria-pressed="true">Pages</button>
+    <div id="docName" class="doc-name"></div>
+
+    <div class="tool-group" role="group" aria-label="Page">
+      <button id="prevPage" class="tool" title="Previous page (←)">‹</button>
+      <input id="pageInput" class="input page-input" type="text" inputmode="numeric" aria-label="Page number">
+      <span id="pageCount" class="muted">/ –</span>
+      <button id="nextPage" class="tool" title="Next page (→)">›</button>
+    </div>
+
+    <div class="tool-group" role="group" aria-label="Zoom">
+      <button id="zoomOut" class="tool" title="Zoom out (⌘−)">−</button>
+      <select id="zoomSelect" class="select zoom-select" aria-label="Zoom"></select>
+      <button id="zoomIn" class="tool" title="Zoom in (⌘+)">+</button>
+    </div>
+
+    <div class="tool-group finder" role="search">
+      <input id="findInput" class="input find-input" type="search" placeholder="Find in document" aria-label="Find in document">
+      <span id="findCount" class="muted find-count" aria-live="polite"></span>
+      <button id="findPrev" class="tool" title="Previous match (⇧⌘G)">↑</button>
+      <button id="findNext" class="tool" title="Next match (⌘G)">↓</button>
+    </div>
+  </header>
+
+  <div class="reader-body">
+    <aside id="thumbs" class="thumbs" aria-label="Page thumbnails"></aside>
+    <main id="pages" class="pages" tabindex="0" aria-label="Document pages"></main>
+  </div>
+
+  <div id="readerStatus" class="reader-status"><div class="spinner"></div><div id="readerStatusText">Opening…</div></div>
+</body>
+</html>

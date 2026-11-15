@@ -2,7 +2,7 @@
 // Opens windows and goes FULLSCREEN — don't run while you're using the computer.
 // Usage: node scripts/capture-docs-screens.js     (writes docs/manual/img/*.png)
 //        PK_DOCS_EDITOR_ONLY=1 node scripts/capture-docs-screens.js
-//          only the editor screenshots (01-06 and 12): one normal window, nothing fullscreen
+//          only the editor and reader screenshots (01-06, 12, 13): normal windows, nothing fullscreen
 import { _electron as electron } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -79,6 +79,15 @@ async function main() {
     await shot(editor, '12-theme-editor.png');
     await editor.click('#themeCancel');
     await editor.waitForTimeout(300);
+
+    // Reader window on the first deck, with a search in progress.
+    const [reader] = await Promise.all([app.waitForEvent('window'), editor.locator('.row').first().locator('.read').click()]);
+    await reader.waitForSelector('body[data-ready="1"]');
+    await reader.fill('#findInput', 'gardens');
+    await reader.locator('mark.current').waitFor({ timeout: 8000 }).catch(() => {});
+    await reader.waitForTimeout(500);
+    await shot(reader, '13-reader.png');
+    await reader.close();
 
     // Drop overlay (normally shown while dragging files over the window).
     await editor.evaluate(() => { document.getElementById('dropOverlay').hidden = false; });

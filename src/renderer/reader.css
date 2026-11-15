@@ -1,0 +1,70 @@
+/* Reader window: a toolbar, an optional thumbnail strip, and the pages in one scrolling column. */
+body.reader { display: flex; flex-direction: column; height: 100%; overflow: hidden; user-select: none; }
+
+.reader-bar {
+  display: flex; align-items: center; gap: 14px; padding: 8px 12px; flex: none;
+  background: var(--bg-elev); border-bottom: 1px solid var(--border);
+}
+.doc-name { flex: 1 1 120px; min-width: 60px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-group { display: flex; align-items: center; gap: 6px; flex: none; }
+.tool {
+  appearance: none; min-width: 30px; height: 30px; padding: 0 9px; border-radius: 7px; cursor: pointer;
+  background: var(--bg-elev-2); border: 1px solid var(--border); color: var(--text); font: inherit; font-weight: 600;
+  transition: border-color 0.12s, background 0.12s;
+}
+.tool:hover { border-color: var(--border-hover); background: var(--btn-hover); }
+.tool:disabled { opacity: 0.4; cursor: default; }
+.tool[aria-pressed="true"] { border-color: var(--accent); }
+.input, .select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 7px;
+  padding: 5px 8px; font: inherit; outline: none; height: 30px;
+}
+.input:focus, .select:focus { border-color: var(--accent); }
+.page-input { width: 46px; text-align: center; }
+.zoom-select { width: 112px; }
+.find-input { width: 190px; user-select: text; }
+.find-count { min-width: 70px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.find-count.none { color: var(--warn); }
+.muted { color: var(--text-dim); }
+
+.reader-body { flex: 1 1 auto; display: flex; min-height: 0; }
+.thumbs {
+  flex: none; width: 168px; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--bg-elev); border-right: 1px solid var(--border);
+}
+.thumbs[hidden] { display: none; }
+.thumb-item {
+  appearance: none; border: 2px solid transparent; border-radius: 8px; background: transparent; padding: 4px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-dim); font: inherit; font-size: 11px;
+}
+.thumb-item:hover { border-color: var(--border-hover); }
+.thumb-item.current { border-color: var(--accent); color: var(--text); }
+.thumb-box { display: grid; place-items: center; background: var(--well); border-radius: 4px; overflow: hidden; }
+.thumb-box canvas { display: block; }
+.thumb-item .hits { color: var(--accent); font-weight: 700; }
+
+.pages { flex: 1 1 auto; overflow: auto; background: var(--well); padding: 18px 0 40px; outline: none; }
+.page {
+  position: relative; margin: 0 auto 16px; background: #fff; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+  user-select: text;
+}
+.page canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.page .page-error { position: absolute; inset: 0; display: grid; place-items: center; color: #b00020; font-size: 14px; }
+
+/* pdf.js text layer: invisible text exactly over the picture of the page, so it can be selected and searched. */
+.textLayer {
+  position: absolute; inset: 0; overflow: clip; opacity: 1; line-height: 1; text-align: initial;
+  text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; z-index: 1;
+}
+.textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.textLayer ::selection { background: color-mix(in srgb, #2f7bff 35%, transparent); }
+.textLayer mark { color: transparent; background: rgba(255, 214, 10, 0.45); border-radius: 2px; }
+.textLayer mark.current { background: rgba(0, 200, 170, 0.5); outline: 2px solid rgba(0, 140, 120, 0.95); }
+
+.reader-status {
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: var(--bg); color: var(--text-dim); z-index: 50;
+}
+.reader-status[hidden] { display: none; }
+.reader-status.error .spinner { display: none; }
+.reader-status.error { color: var(--danger); }

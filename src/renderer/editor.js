@@ -292,6 +292,9 @@ function buildRow(ev, it, i, warnings) {
       <div class="detail"></div>
     </div>
     <div class="row-actions">
+      <button class="icon-btn read" title="Open in the reader: every page, zoom and search" aria-label="Open in the reader">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 1.5h7l3 3v10H3z M10 1.5v3h3 M5.5 8h5 M5.5 10.5h5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      </button>
       <button class="icon-btn play-here" title="Play from this PDF">▶</button>
       <button class="icon-btn move-up" title="Move up (⌥↑)">↑</button>
       <button class="icon-btn move-down" title="Move down (⌥↓)">↓</button>
@@ -329,6 +332,12 @@ function buildRow(ev, it, i, warnings) {
     });
   }
 
+  const read = () => guarded('Opening the reader', () => pk.readItem(ev.id, it.id));
+  li.querySelector('.read').addEventListener('click', (e) => {
+    e.stopPropagation();
+    read();
+  });
+  li.querySelector('.thumb').addEventListener('dblclick', read);
   li.querySelector('.play-here').addEventListener('click', (e) => {
     e.stopPropagation();
     play(it.id);
@@ -1018,6 +1027,7 @@ function wireControls() {
 
   pk.onMenu('newEvent', () => newEvent());
   pk.onMenu('practice', () => practice());
+  pk.onMenu('openReader', () => guarded('Opening the reader', () => pk.readFile()));
   pk.onMenu('speedrun', () => openSpeedrunDialog());
   pk.onMenu('addPdfs', () => (selected() ? addPdfsViaDialog() : toast('Create or select an event first.')));
   pk.onPlayerClosed(async ({ eventId }) => {

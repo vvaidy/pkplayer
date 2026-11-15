@@ -67,7 +67,7 @@ When any row has a yellow or red badge, the summary under the settings adds a co
 
 The shape check looks at the first page of each PDF and compares decks with each other, not with your display. It only speaks up when one shape is clearly the most common: with one 16:9 deck and one 4:3 deck, neither is flagged.
 
-Row buttons (they brighten when you hover): **▶** play from this PDF, **↑ / ↓** move, **✕** remove.
+Row buttons (they brighten when you hover): the **page icon** opens the deck in the [reader](#reader), **▶** plays from this PDF, **↑ / ↓** move, **✕** removes.
 
 ### Adding PDFs
 
@@ -96,6 +96,34 @@ Added PDFs are **copied** into PK Player's library, so the originals can be move
 | Row **▶** or Enter on a row | From that deck. |
 
 The resume point is kept until you quit the app.
+
+## Reader
+
+The reader opens a PDF in an ordinary window for reading, not presenting. Use it to look through a whole deck: the playlist only shows page 1, and the player only shows the pages that will play.
+
+![The reader window with thumbnails and a search](img/13-reader.png)
+
+**To open it**
+
+- Click the page icon on a playlist row, or double-click the row's thumbnail.
+- Or choose **File → Open PDF in Reader…** (⇧⌘O / Ctrl+Shift+O) for any PDF on your computer. That file is not added to an event and not copied.
+
+**What it does**
+
+| To | Do this |
+| --- | --- |
+| Move through pages | Scroll, press **→ / ←** or Page Down / Page Up, **Home** / **End**, type a page number, or click a thumbnail. |
+| Zoom | **+** and **−** buttons (⌘+ / ⌘−), the zoom menu (**Fit width**, **Fit page**, 50% to 400%), or pinch on a trackpad. ⌘0 goes back to Fit width. |
+| Hide the thumbnails | Click **Pages**. |
+| Find text | ⌘F, type, and press **Enter** for the next match (Shift+Enter for the previous; ⌘G and ⇧⌘G also work). Matches are highlighted, and thumbnails show how many each page has. **Esc** clears the search. |
+| Copy text | Select it with the mouse and press ⌘C. |
+
+Things to know:
+
+- The reader never changes a file. There is nothing to save.
+- Every page of the PDF is shown, including pages beyond Max slides.
+- Search finds text that is real text in the PDF. Words that are part of a picture are not found, and a phrase that breaks across two lines is not found as one match.
+- You can have several reader windows open. They close when you close the main window.
 
 ## Speedrun test
 

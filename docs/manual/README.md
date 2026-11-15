@@ -48,6 +48,7 @@ PK Player runs PechaKucha nights from PDF files. You build an **Event** — a pl
 | ⌘N / Ctrl+N | New event |
 | ⌘O / Ctrl+O | Add PDFs |
 | ⇧⌘P / Ctrl+Shift+P | Practice a PDF: play one file with the timer, saving nothing |
+| ⇧⌘O / Ctrl+Shift+O | Open any PDF in the reader |
 | ↑ / ↓ | Move between playlist rows |
 | ⌥↑ / ⌥↓ (Alt on Windows/Linux) | Move the focused PDF up / down |
 | Delete / Backspace | Remove the focused PDF |
