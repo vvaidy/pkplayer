@@ -686,6 +686,50 @@ test('reader: a deck opens with every page, thumbnails, zoom, selectable text an
   await expect(reader.locator('#findCount')).toHaveText('');
   await expect(reader.locator('#findInput')).toHaveValue('');
 
+  // Grid view: every page at once, with the pages this event will not play set apart.
+  await expect(reader.locator('body')).toHaveAttribute('data-view', 'pages');
+  await reader.fill('#pageInput', '6');
+  await reader.press('#pageInput', 'Enter');
+  await reader.click('#toggleGrid');
+  await expect(reader.locator('body')).toHaveAttribute('data-view', 'grid');
+  await expect(reader.locator('#readerBody')).toBeHidden();
+  await expect(reader.locator('#gridTiles .thumb-item')).toHaveCount(25);
+  await expect(reader.locator('#gridInfo')).toHaveText('25 pages · this event plays the first 4; 21 more are not played');
+  await expect(reader.locator('#gridTiles .thumb-item.beyond')).toHaveCount(21);
+  await expect(reader.locator('#gridTiles .thumb-item').nth(3)).not.toHaveClass(/beyond/);
+  await expect(reader.locator('#gridTiles .thumb-item').nth(4)).toHaveClass(/beyond/);
+  await expect(reader.locator('#gridTiles .thumb-item').nth(4).locator('.thumb-label')).toHaveText('5 · not played');
+  await expect(reader.locator('#gridTiles .thumb-item').nth(5)).toHaveClass(/current/); // the page being read
+  await expect(reader.locator('#gridTiles .thumb-item').first().locator('canvas')).toHaveCount(1);
+  await expect(reader.locator('#zoomIn')).toBeDisabled(); // zoom belongs to the page view
+  // The thumbnail strip marks the same pages.
+  expect(await reader.locator('#thumbs .thumb-item.beyond').count()).toBe(21);
+  // Search works from the grid: counts appear on the tiles, and Enter moves between pages.
+  await reader.fill('#findInput', 'slide 20 of 25');
+  await expect(reader.locator('#findCount')).toHaveText('1 of 1');
+  await expect(reader.locator('#gridTiles .thumb-item').nth(19).locator('.hits')).toHaveText('1 match');
+  await expect(reader.locator('#gridTiles .thumb-item').nth(19)).toHaveClass(/current/);
+  await expect(reader.locator('body')).toHaveAttribute('data-view', 'grid'); // searching does not leave the grid
+  await reader.screenshot({ path: path.join(SHOTS, 'reader-grid.png') });
+  await reader.press('#findInput', 'Escape');
+  // Clicking a page opens it in the page view.
+  await reader.locator('#gridTiles .thumb-item').nth(8).click();
+  await expect(reader.locator('body')).toHaveAttribute('data-view', 'pages');
+  await expect(reader.locator('#pageInput')).toHaveValue('9');
+  await expect(reader.locator('.page').nth(8)).toHaveAttribute('data-drawn', '1');
+  await expect(reader.locator('#zoomIn')).toBeEnabled();
+  expect(await pageWidth()).toBeGreaterThan(300); // the page column was laid out again at a real size
+  // G toggles the grid; Esc goes back to the page that was being read.
+  await reader.locator('#pages').focus();
+  await reader.keyboard.press('g');
+  await expect(reader.locator('body')).toHaveAttribute('data-view', 'grid');
+  await reader.keyboard.press('Escape');
+  await expect(reader.locator('body')).toHaveAttribute('data-view', 'pages');
+  await expect(reader.locator('#pageInput')).toHaveValue('9');
+  await reader.click('#toggleGrid');
+  await reader.click('#toggleGrid');
+  await expect(reader.locator('#pageInput')).toHaveValue('9');
+
   // The reader only ever gets the file it was opened for.
   expect(await reader.evaluate(() => fetch('app://bundle/external/not-a-real-token').then((r) => r.status))).toBeGreaterThanOrEqual(400);
 
@@ -696,6 +740,11 @@ test('reader: a deck opens with every page, thumbnails, zoom, selectable text an
   await stubOpenDialog(app, [fx('charlie-3-slides.pdf')]);
   const second = await openReader(() => clickMenu('Open PDF in Reader…'));
   await expect(second.locator('#pageCount')).toHaveText('/ 3');
+  // A PDF opened on its own belongs to no event, so no page is marked as not played.
+  await second.click('#toggleGrid');
+  await expect(second.locator('#gridInfo')).toHaveText('3 pages');
+  await expect(second.locator('#gridTiles .thumb-item.beyond')).toHaveCount(0);
+  await second.click('#toggleGrid');
   await expect(second.locator('.page').first()).toHaveAttribute('data-drawn', '1');
   expect(await second.title()).toBe('charlie-3-slides.pdf — PK Player Reader');
   expect(await rowNames(editor)).toEqual(['alpha-5-slides.pdf', 'bravo-25-slides.pdf']); // nothing was added
@@ -710,6 +759,8 @@ test('reader: a deck opens with every page, thumbnails, zoom, selectable text an
   // Double-clicking a thumbnail in the playlist opens the reader too.
   const third = await openReader(() => editor.locator('.row').first().locator('.thumb').dblclick());
   await expect(third.locator('#pageCount')).toHaveText('/ 5');
+  await third.keyboard.press('g');
+  await expect(third.locator('#gridInfo')).toHaveText('5 pages · this event plays the first 4; 1 more is not played');
 
   // Reader windows close with the editor.
   await second.close();

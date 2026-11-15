@@ -115,13 +115,16 @@ The reader opens a PDF in an ordinary window for reading, not presenting. Use it
 | Move through pages | Scroll, press **→ / ←** or Page Down / Page Up, **Home** / **End**, type a page number, or click a thumbnail. |
 | Zoom | **+** and **−** buttons (⌘+ / ⌘−), the zoom menu (**Fit width**, **Fit page**, 50% to 400%), or pinch on a trackpad. ⌘0 goes back to Fit width. |
 | Hide the thumbnails | Click **Pages**. |
+| See every page at once | Click **Grid** or press **G**. Click a page to open it; **Esc** goes back to where you were. |
 | Find text | ⌘F, type, and press **Enter** for the next match (Shift+Enter for the previous; ⌘G and ⇧⌘G also work). Matches are highlighted, and thumbnails show how many each page has. **Esc** clears the search. |
 | Copy text | Select it with the mouse and press ⌘C. |
+
+![The reader's grid view of a deck with more pages than Max slides](img/14-reader-grid.png)
 
 Things to know:
 
 - The reader never changes a file. There is nothing to save.
-- Every page of the PDF is shown, including pages beyond Max slides.
+- Every page of the PDF is shown, including pages beyond Max slides. When you open a deck from the playlist, those extra pages are dimmed and labelled **not played** in the thumbnails and the grid, and the grid says how many the event will play. A PDF opened from the File menu belongs to no event, so nothing is marked.
 - Search finds text that is real text in the PDF. Words that are part of a picture are not found, and a phrase that breaks across two lines is not found as one match.
 - You can have several reader windows open. They close when you close the main window.
 

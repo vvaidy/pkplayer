@@ -2,7 +2,7 @@
 // Opens windows and goes FULLSCREEN — don't run while you're using the computer.
 // Usage: node scripts/capture-docs-screens.js     (writes docs/manual/img/*.png)
 //        PK_DOCS_EDITOR_ONLY=1 node scripts/capture-docs-screens.js
-//          only the editor and reader screenshots (01-06, 12, 13): normal windows, nothing fullscreen
+//          only the editor and reader screenshots (01-06, 12-14): normal windows, nothing fullscreen
 import { _electron as electron } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -88,6 +88,15 @@ async function main() {
     await reader.waitForTimeout(500);
     await shot(reader, '13-reader.png');
     await reader.close();
+
+    // The reader's grid on the over-long deck, with the pages that will not play dimmed.
+    const [grid] = await Promise.all([app.waitForEvent('window'), editor.locator('.row').nth(3).locator('.read').click()]);
+    await grid.waitForSelector('body[data-ready="1"]');
+    await grid.click('#toggleGrid');
+    await grid.locator('#gridTiles .thumb-item').nth(11).locator('canvas').waitFor({ timeout: 8000 }).catch(() => {});
+    await grid.waitForTimeout(700);
+    await shot(grid, '14-reader-grid.png');
+    await grid.close();
 
     // Drop overlay (normally shown while dragging files over the window).
     await editor.evaluate(() => { document.getElementById('dropOverlay').hidden = false; });

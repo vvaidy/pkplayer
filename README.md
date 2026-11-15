@@ -57,7 +57,7 @@ Then, when you need them:
 - **Present on** chooses which display goes fullscreen.
 - **Theme** picks from 11 color themes, dark and light, all made for PK Player. It colors the editor and the player's own controls, never your slides. "Vibe with Claude" is the original look. **Customize…** makes your own theme from six colors with a live preview; **Import…** reads a PK Player, Ghostty or iTerm2 theme file.
 - Play options: **Play** (or **F**), ▶ on a row to start from that PDF, or Enter on a focused row.
-- **Reader:** the page icon on a row (or File → Open PDF in Reader…) opens a PDF in a normal window with every page, thumbnails, zoom, selectable text and search. It never changes the file.
+- **Reader:** the page icon on a row (or File → Open PDF in Reader…) opens a PDF in a normal window with every page, thumbnails, a grid of all pages, zoom, selectable text and search. Pages beyond Max slides are marked as not played. It never changes the file.
 - **Speedrun test…** plays the whole event at 5×, 10× or 20× to check every slide draws, then reports. The speed is never saved, so Play is always normal speed.
 - **File → Practice a PDF…** (⇧⌘P) plays one PDF with the timer and saves nothing. It uses the selected event's timing, or 20 × 20 when no event is selected.
 

@@ -42,6 +42,16 @@ body.reader { display: flex; flex-direction: column; height: 100%; overflow: hid
 .thumb-box { display: grid; place-items: center; background: var(--well); border-radius: 4px; overflow: hidden; }
 .thumb-box canvas { display: block; }
 .thumb-item .hits { color: var(--accent); font-weight: 700; }
+/* Pages the event would not play (beyond Max slides): still readable, clearly set apart. */
+.thumb-item.beyond .thumb-box { opacity: 0.38; }
+.thumb-item.beyond .thumb-label { color: var(--warn); }
+
+/* Grid view: every page at once. */
+.reader-body[hidden], .grid-view[hidden] { display: none; }
+.grid-view { flex: 1 1 auto; overflow-y: auto; background: var(--well); padding: 16px 20px 40px; outline: none; }
+.grid-info { color: var(--text-dim); font-size: 13px; margin: 0 4px 14px; }
+.grid-tiles { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.grid-tiles .thumb-item { font-size: 12px; }
 
 .pages { flex: 1 1 auto; overflow: auto; background: var(--well); padding: 18px 0 40px; outline: none; }
 .page {

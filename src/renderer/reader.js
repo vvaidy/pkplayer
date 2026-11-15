@@ -5,12 +5,14 @@ import {
   FIT_PAGE, FIT_WIDTH, POINT_TO_PIXEL, ZOOM_STEPS, clampZoom, findInDocument, fitZoom, matchRanges, nextZoom,
   normalizeQuery, stepHit,
 } from '../lib/reader.js';
+import { slidesToPlay } from '../lib/player-controller.js';
 import { TextLayer, openPdfAt } from './pdf.js';
 
 // ---------- reader parameters ----------
 const RENDER_MARGIN = '700px 0px'; // draw pages a little before they scroll into view
 const MAX_CANVAS_PIXELS = 24e6; // above this a page is drawn at lower density instead of exhausting memory
 const THUMB_WIDTH = 132;
+const GRID_WIDTH = 236; // width of one page in the grid view
 const PAGE_GUTTER = 36; // space left and right of a page at fit-to-width
 const FIND_DELAY_MS = 220;
 
@@ -18,6 +20,8 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(window.location.search);
 const SRC = params.get('src') || '';
 const NAME = params.get('name') || 'PDF';
+/** Max slides of the event this deck was opened from, or null for a PDF opened on its own. */
+const MAX_SLIDES = Number.parseInt(params.get('max'), 10) > 0 ? Number.parseInt(params.get('max'), 10) : null;
 
 let doc = null;
 /** One entry per page: { el, size: {width, height} in points, drawnAt: zoom|null, task, textLayer } */
@@ -176,7 +180,7 @@ function renderPageControl() {
   $('prevPage').disabled = currentPage === 0;
   $('nextPage').disabled = currentPage >= pages.length - 1;
   document.body.dataset.page = String(currentPage + 1);
-  for (const el of $('thumbs').children) el.classList.toggle('current', Number(el.dataset.page) === currentPage);
+  markCurrentTiles();
   const cur = $('thumbs').children[currentPage];
   if (cur && !$('thumbs').hidden) cur.scrollIntoView({ block: 'nearest' });
 }
@@ -187,46 +191,104 @@ function goToPage(index, { top = true } = {}) {
   if (top) scroller.scrollTop = pages[i].el.offsetTop - 12;
   currentPage = i;
   renderPageControl();
+  if (document.body.dataset.view === 'grid') $('gridTiles').children[i]?.scrollIntoView({ block: 'nearest' });
 }
 
 // ---------- thumbnails ----------
 
-function buildThumbs() {
+/** How many pages the event would play, or null when the PDF was not opened from an event. */
+function playedCount() {
+  return MAX_SLIDES ? slidesToPlay(pages.length, MAX_SLIDES) : null;
+}
+
+/**
+ * Fill a container with one small picture per page, drawn only when scrolled near.
+ * Used for the thumbnail strip and for the grid view. Pages the event would not play are marked.
+ */
+function buildTiles(container, width, onPick) {
   const observer = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
       observer.unobserve(e.target);
-      drawThumb(Number(e.target.dataset.page), e.target.querySelector('.thumb-box'));
+      drawThumb(Number(e.target.dataset.page), e.target.querySelector('.thumb-box'), width);
     }
-  }, { root: $('thumbs'), rootMargin: '300px 0px' });
-  $('thumbs').replaceChildren(...pages.map((p, i) => {
+  }, { root: container, rootMargin: '300px 0px' });
+  const played = playedCount();
+  container.replaceChildren(...pages.map((p, i) => {
     const item = document.createElement('button');
-    item.className = 'thumb-item';
+    const beyond = played !== null && i >= played;
+    item.className = `thumb-item${beyond ? ' beyond' : ''}`;
     item.dataset.page = String(i);
-    item.title = `Go to page ${i + 1}`;
+    item.title = beyond ? `Page ${i + 1}: beyond Max slides, so it is not played` : `Go to page ${i + 1}`;
     const box = document.createElement('div');
     box.className = 'thumb-box';
-    box.style.width = `${THUMB_WIDTH}px`;
-    box.style.height = `${Math.round(THUMB_WIDTH * p.size.height / p.size.width)}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${Math.round(width * p.size.height / p.size.width)}px`;
     const label = document.createElement('span');
     label.className = 'thumb-label';
-    label.textContent = String(i + 1);
+    label.textContent = beyond ? `${i + 1} · not played` : String(i + 1);
     item.append(box, label);
-    item.addEventListener('click', () => goToPage(i));
+    item.addEventListener('click', () => onPick(i));
     observer.observe(item);
     return item;
   }));
 }
 
-async function drawThumb(index, box) {
+function buildThumbs() {
+  buildTiles($('thumbs'), THUMB_WIDTH, (i) => goToPage(i));
+}
+
+// ---------- grid view ----------
+
+let gridBuilt = false;
+
+/** Switch between reading pages and the grid: every page at once, like a contact sheet. */
+function setView(view) {
+  const grid = view === 'grid';
+  document.body.dataset.view = grid ? 'grid' : 'pages';
+  $('toggleGrid').setAttribute('aria-pressed', String(grid));
+  $('gridView').hidden = !grid;
+  $('readerBody').hidden = grid;
+  for (const id of ['zoomOut', 'zoomIn', 'zoomSelect', 'toggleThumbs']) $(id).disabled = grid; // these act on the page view
+  if (grid) {
+    if (!gridBuilt) {
+      buildTiles($('gridTiles'), GRID_WIDTH, (i) => {
+        setView('pages');
+        goToPage(i);
+      });
+      gridBuilt = true;
+      const played = playedCount();
+      const n = pages.length;
+      $('gridInfo').textContent = played !== null && played < n
+        ? `${n} pages · this event plays the first ${played}; ${n - played} more ${n - played === 1 ? 'is' : 'are'} not played`
+        : `${n} page${n === 1 ? '' : 's'}${played !== null ? ' · all of them play in this event' : ''}`;
+    }
+    renderFind(); // match counts on the tiles
+    markCurrentTiles();
+    $('gridTiles').children[currentPage]?.scrollIntoView({ block: 'center' });
+    $('gridView').focus();
+  } else {
+    layout(); // the page column was hidden, so its size could not be measured until now
+    goToPage(currentPage); // and it lost its scroll position while hidden
+    $('pages').focus();
+  }
+}
+
+function markCurrentTiles() {
+  for (const container of [$('thumbs'), $('gridTiles')]) {
+    for (const el of container.children) el.classList.toggle('current', Number(el.dataset.page) === currentPage);
+  }
+}
+
+async function drawThumb(index, box, width) {
   try {
     const page = await doc.getPage(index + 1);
     const density = window.devicePixelRatio || 1;
-    const viewport = page.getViewport({ scale: (THUMB_WIDTH / pages[index].size.width) * density });
+    const viewport = page.getViewport({ scale: (width / pages[index].size.width) * density });
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.floor(viewport.width));
     canvas.height = Math.max(1, Math.floor(viewport.height));
-    canvas.style.width = `${THUMB_WIDTH}px`;
+    canvas.style.width = `${width}px`;
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -292,15 +354,17 @@ function renderFind() {
   $('findPrev').disabled = n === 0;
   $('findNext').disabled = n === 0;
   document.body.dataset.findCount = String(n);
-  [...$('thumbs').children].forEach((el, i) => {
-    el.querySelector('.hits')?.remove();
-    if (find.perPage[i]) {
-      const tag = document.createElement('span');
-      tag.className = 'hits';
-      tag.textContent = `${find.perPage[i]} match${find.perPage[i] === 1 ? '' : 'es'}`;
-      el.append(tag);
-    }
-  });
+  for (const container of [$('thumbs'), $('gridTiles')]) {
+    [...container.children].forEach((el, i) => {
+      el.querySelector('.hits')?.remove();
+      if (find.perPage[i]) {
+        const tag = document.createElement('span');
+        tag.className = 'hits';
+        tag.textContent = `${find.perPage[i]} match${find.perPage[i] === 1 ? '' : 'es'}`;
+        el.append(tag);
+      }
+    });
+  }
   for (const i of visible) markPage(i);
 }
 
@@ -326,6 +390,12 @@ async function runFind(raw) {
 function showCurrentHit() {
   const hit = find.hits[find.index];
   if (!hit) return;
+  if (document.body.dataset.view === 'grid') { // in the grid, a match is shown by moving to its page's tile
+    currentPage = hit.page;
+    renderPageControl();
+    $('gridTiles').children[hit.page]?.scrollIntoView({ block: 'nearest' });
+    return;
+  }
   const scroller = $('pages');
   const page = pages[hit.page].el;
   if (page.offsetTop < scroller.scrollTop || page.offsetTop + page.offsetHeight > scroller.scrollTop + scroller.clientHeight) {
@@ -367,6 +437,7 @@ function wire() {
     e.target.blur();
   });
   $('pageInput').addEventListener('focus', (e) => e.target.select());
+  $('toggleGrid').addEventListener('click', () => setView(document.body.dataset.view === 'grid' ? 'pages' : 'grid'));
   $('toggleThumbs').addEventListener('click', () => {
     const show = $('thumbs').hidden;
     $('thumbs').hidden = !show;
@@ -405,7 +476,7 @@ function wire() {
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      if (typeof zoomMode !== 'number') layout();
+      if (typeof zoomMode !== 'number' && document.body.dataset.view !== 'grid') layout();
     }, 120);
   });
   // Pinch on a trackpad, or Ctrl/Cmd + wheel, zooms.
@@ -418,7 +489,17 @@ function wire() {
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey;
     const typing = e.target instanceof HTMLElement && e.target.matches('input, select');
-    if (mod && (e.key === 'f' || e.key === 'F')) {
+    const grid = document.body.dataset.view === 'grid';
+    if (!typing && !mod && (e.key === 'g' || e.key === 'G')) {
+      e.preventDefault();
+      setView(grid ? 'pages' : 'grid');
+    } else if (grid && !typing && (e.key === 'Escape' || e.key === 'Enter')) {
+      e.preventDefault();
+      setView('pages');
+      goToPage(currentPage);
+    } else if (grid && mod && ['=', '+', '-', '0'].includes(e.key)) {
+      e.preventDefault(); // zoom belongs to the page view
+    } else if (mod && (e.key === 'f' || e.key === 'F')) {
       e.preventDefault();
       $('findInput').focus();
       $('findInput').select();
@@ -476,6 +557,7 @@ async function init() {
   renderPageControl();
   renderFind();
   $('readerStatus').hidden = true;
+  document.body.dataset.view = 'pages';
   document.body.dataset.ready = '1';
   container.focus();
 }

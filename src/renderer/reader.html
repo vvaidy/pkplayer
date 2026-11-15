@@ -13,6 +13,7 @@
 <body class="reader">
   <header class="reader-bar">
     <button id="toggleThumbs" class="tool" title="Show or hide page thumbnails" aria-pressed="true">Pages</button>
+    <button id="toggleGrid" class="tool" title="Grid: see every page at once (G)" aria-pressed="false">Grid</button>
     <div id="docName" class="doc-name"></div>
 
     <div class="tool-group" role="group" aria-label="Page">
@@ -36,7 +37,12 @@
     </div>
   </header>
 
-  <div class="reader-body">
+  <div id="gridView" class="grid-view" tabindex="0" aria-label="All pages" hidden>
+    <div id="gridInfo" class="grid-info"></div>
+    <div id="gridTiles" class="grid-tiles"></div>
+  </div>
+
+  <div id="readerBody" class="reader-body">
     <aside id="thumbs" class="thumbs" aria-label="Page thumbnails"></aside>
     <main id="pages" class="pages" tabindex="0" aria-label="Document pages"></main>
   </div>
