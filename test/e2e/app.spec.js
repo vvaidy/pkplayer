@@ -1212,6 +1212,34 @@ test('practice: plays one PDF with the timer, saves nothing, and uses the select
   await player.keyboard.press('n'); // skip the only deck
   await expect(player.locator('#ended')).toBeVisible();
   await expect(player.locator('.ended-title')).toHaveText('End of practice');
+  await expect(player.locator('#endedHint')).toHaveText('Space to go again · Esc to return to the editor');
+
+  // Go again: Space on the end screen returns to the Play button, and the deck plays from page 1.
+  await player.keyboard.press('Space');
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'waiting');
+  await expect(player.locator('#ended')).toBeHidden();
+  await expect(player.locator('#deckLabel')).toHaveText('PDF 1 of 1 · alpha-5-slides.pdf · 5 slides');
+  await player.keyboard.press('Space');
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'playing');
+  await expect(player.locator('#counter')).toHaveText('1 / 5');
+  await player.keyboard.press('ArrowRight');
+  await player.keyboard.press('ArrowRight');
+  await expect(player.locator('#counter')).toHaveText('3 / 5');
+  // R starts over from the middle of a run, paused or not.
+  await player.keyboard.press('r');
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'waiting');
+  await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '1');
+  await player.keyboard.press('Enter');
+  await player.keyboard.press('Space'); // pause
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'paused');
+  await player.keyboard.press('R');
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'waiting');
+  await expect(player.locator('#pauseBadge')).toBeHidden();
+  // Enter on the end screen goes again too.
+  await player.keyboard.press('n');
+  await expect(player.locator('#ended')).toBeVisible();
+  await player.keyboard.press('Enter');
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'waiting');
   await closePlayer(player);
 
   // Nothing is left behind: no event, no copy of the PDF, no resume point.
@@ -1412,6 +1440,12 @@ test('player: the progress bar and slide counter show on white, grey and black s
 
     await player.keyboard.press('n'); // next deck (or the end)
   }
+  await expect(player.locator('#ended')).toBeVisible();
+  // A real event never restarts from its end screen: the go-again keys belong to practice only.
+  await expect(player.locator('#endedHint')).toHaveText('Press Esc to return to the editor');
+  for (const key of ['Space', 'Enter', 'r', 'R']) await player.keyboard.press(key);
+  await player.waitForTimeout(300);
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'ended');
   await expect(player.locator('#ended')).toBeVisible();
   const closed = player.waitForEvent('close');
   await player.keyboard.press('Escape');

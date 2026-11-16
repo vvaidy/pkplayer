@@ -193,7 +193,7 @@ Decks that cannot be read are left out, and the message tells you how many. Your
 - Pick a PDF. The player opens on its Play button, exactly as it would on the night, and all the [player keys](04-player.md#keys) work.
 - **Timing:** if an event is selected, practice uses that event's Time per slide and Max slides. With no event selected it uses 20 seconds and 20 slides.
 - **Nothing is saved.** No event is created, nothing is added to your playlists, and PK Player's working copy of the PDF is removed when you press Esc. Your own file is never changed.
-- To rehearse again, choose Practice a PDF… again.
+- **To go again**, press **Space** or **Enter** on the *End of practice* screen. **R** starts over at any point, even mid-slide. These keys only work in practice: an event never restarts itself.
 
 ## Present on
 

@@ -29,6 +29,8 @@ let docs = [];
 /** For each deck, the PDF page (1-based) shown as its first slide. Usually 1; more when the deck skips its opening pages. */
 let firstPages = [];
 let controller = null;
+/** What the controller was built from, so practice can start over with a fresh one. */
+let controllerOptions = null;
 let lastDeckReported = null;
 /** "deck:slide" -> Promise<HTMLCanvasElement|null> */
 const slideCache = new Map();
@@ -237,6 +239,13 @@ function exitPlayer() {
   });
 }
 
+/** Practice only: go back to the Play button, as if the deck had just been opened. */
+function restartPractice() {
+  controller = new PlayerController({ ...controllerOptions, startDeck: 0 });
+  hideFlash();
+  onStateChange();
+}
+
 function startDeck() {
   if (controller.play(clock())) onStateChange();
 }
@@ -257,6 +266,13 @@ function onKey(e) {
   }
   if (!controller) return;
   const phase = controller.view().phase;
+  // Practice: R starts over at any point, and Space or Enter does on the end screen.
+  // An event never restarts this way: a stray key on the night must not send it back to deck 1.
+  if (ev?.practice && !e.repeat && (k === 'r' || k === 'R' || (phase === PHASE.ENDED && (k === ' ' || k === 'Spacebar' || k === 'Enter')))) {
+    e.preventDefault();
+    restartPractice();
+    return;
+  }
   if (k === ' ' || k === 'Spacebar') {
     e.preventDefault();
     if (e.repeat) return;
@@ -317,7 +333,10 @@ async function init() {
   setupResize();
 
   ev = await pk.getEvent(EVENT_ID);
-  if (ev.practice) document.querySelector('.ended-title').textContent = 'End of practice';
+  if (ev.practice) {
+    document.querySelector('.ended-title').textContent = 'End of practice';
+    $('endedHint').textContent = 'Space to go again · Esc to return to the editor';
+  }
   $('loadingText').textContent = `Loading ${ev.items.length} PDF${ev.items.length === 1 ? '' : 's'}…`;
   const results = await Promise.allSettled(ev.items.map((it) => openPdf(it.file)));
   docs = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
@@ -341,12 +360,13 @@ async function init() {
   // Each deck plays its own page range (the whole deck by default), capped by Max slides.
   const ranges = ev.items.map((it, i) => playedPages(it, pageCounts[i], ev.maxSlides));
   firstPages = ranges.map((r) => r.first);
-  controller = new PlayerController({
+  controllerOptions = {
     pageCounts: ranges.map((r) => r.count),
     timePerSlide: SPEEDRUN ? speedrunSlideSeconds(ev.timePerSlide, SPEEDRUN) : ev.timePerSlide,
     maxSlides: ev.maxSlides,
     startDeck: startDeckIndex,
-  });
+  };
+  controller = new PlayerController(controllerOptions);
   debug('player', `ready: ${pageCounts.length} decks, ${ev.timePerSlide}s/slide, max ${ev.maxSlides}`);
 
   await showCurrent();

@@ -42,6 +42,7 @@ Shown after the last deck. Press **Esc** to return to the editor.
 | → | — | Next slide, with a fresh timer. Past the last slide goes to the next deck's Play button. |
 | ← | — | Previous slide, with a fresh timer. |
 | N | Skip this deck | Abandon this deck; next deck waits on Play. On the last deck: End of event. |
+| R | *Practice only:* start the deck over | *Practice only:* start the deck over |
 | Esc, X, Delete, Backspace | Stop, back to editor | Stop, back to editor |
 | F | Re-enter fullscreen | Re-enter fullscreen |
 
