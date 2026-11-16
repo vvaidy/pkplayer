@@ -99,6 +99,10 @@ Debug logging: `PKPLAY_DEBUG=1 npm start`. Use `PKPLAY_DATA_DIR=/some/dir` for a
 
 Layout: `main.js` (main process, `app://` protocol, IPC), `preload.cjs` (bridge), `src/main/store.js` (persistence), `src/lib/player-controller.js` (pure timing state machine), `src/renderer/` (editor + player UI, pdf.js).
 
+## Ideas not built yet
+
+See [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE). **No warranty: you use PK Player entirely at your own risk.**
