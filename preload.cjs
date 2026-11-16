@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld('pk', {
   pathForFile: (file) => webUtils.getPathForFile(file),
   onPlayerClosed: (fn) => on('player:closed', fn),
   onItemsChanged: (fn) => on('items:changed', fn),
+  onUpdateStatus: (fn) => on('update:status', fn),
+  openDownloadPage: () => call('update:openDownload'),
   onDisplaysChanged: (fn) => on('displays:changed', fn),
   onMenu: (name, fn) => on(`menu:${name}`, fn),
 });

@@ -222,3 +222,12 @@
 .speed-choices .speed-name { font-weight: 600; min-width: 44px; }
 .speed-choices .speed-time { color: var(--text-dim); font-size: 13px; }
 
+/* ---------- update notice ---------- */
+.update-banner {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 18px; padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev)); border: 1px solid var(--accent); border-radius: var(--radius);
+  animation: rise-in 0.2s ease-out;
+}
+.update-banner[hidden] { display: none; }
+.update-banner .spacer { flex: 1; }
+

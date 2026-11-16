@@ -26,7 +26,13 @@ export class StoreError extends Error {}
 const newId = () => crypto.randomUUID();
 
 function emptyData() {
-  return { version: SCHEMA_VERSION, settings: { displayId: null, theme: DEFAULT_THEME_ID }, themes: [], events: [] };
+  return {
+    version: SCHEMA_VERSION,
+    // checkUpdates: look for a newer version once a day. lastUpdateCheck: when that last ran (ISO date) or null.
+    settings: { displayId: null, theme: DEFAULT_THEME_ID, checkUpdates: true, lastUpdateCheck: null },
+    themes: [],
+    events: [],
+  };
 }
 
 function clampNumber(value, { min, max }, label, { integer = false } = {}) {
@@ -91,6 +97,10 @@ export class Store {
       const raw = JSON.parse(fs.readFileSync(this.file, { encoding: 'utf-8' }));
       const data = emptyData();
       data.settings = { ...data.settings, ...(raw.settings || {}) };
+      data.settings.checkUpdates = data.settings.checkUpdates !== false;
+      if (typeof data.settings.lastUpdateCheck !== 'string' || Number.isNaN(Date.parse(data.settings.lastUpdateCheck))) {
+        data.settings.lastUpdateCheck = null;
+      }
       // Custom themes: keep the valid ones, quietly drop anything damaged.
       for (const item of Array.isArray(raw.themes) ? raw.themes : []) {
         try {
@@ -544,6 +554,15 @@ export class Store {
     if ('theme' in patch) {
       if (!this.#hasTheme(patch.theme)) throw new StoreError(`Unknown theme: ${patch.theme}`);
       this.data.settings.theme = patch.theme;
+    }
+    if ('checkUpdates' in patch) {
+      if (typeof patch.checkUpdates !== 'boolean') throw new StoreError('The update check setting must be on or off');
+      this.data.settings.checkUpdates = patch.checkUpdates;
+    }
+    if ('lastUpdateCheck' in patch) {
+      const when = patch.lastUpdateCheck;
+      if (when !== null && (typeof when !== 'string' || Number.isNaN(Date.parse(when)))) throw new StoreError('Invalid update check time');
+      this.data.settings.lastUpdateCheck = when;
     }
     this.#save();
     return this.getSettings();

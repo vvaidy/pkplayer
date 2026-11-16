@@ -323,7 +323,7 @@ test('duplicateEvent copies presenter and title', () => {
 
 test('settings persist', () => {
   const s = new Store(dir);
-  assert.deepEqual(s.getSettings(), { displayId: null, theme: 'midnight-teal' });
+  assert.deepEqual(s.getSettings(), { displayId: null, theme: 'midnight-teal', checkUpdates: true, lastUpdateCheck: null });
   s.updateSettings({ displayId: '12345' });
   assert.equal(new Store(dir).getSettings().displayId, 12345);
   s.updateSettings({ displayId: null });
@@ -334,7 +334,7 @@ test('theme setting persists, rejects unknown themes and leaves the display alon
   const s = new Store(dir);
   s.updateSettings({ displayId: '7' });
   assert.equal(s.updateSettings({ theme: 'blueprint' }).theme, 'blueprint');
-  assert.deepEqual(new Store(dir).getSettings(), { displayId: 7, theme: 'blueprint' });
+  assert.deepEqual(new Store(dir).getSettings(), { displayId: 7, theme: 'blueprint', checkUpdates: true, lastUpdateCheck: null });
   assert.throws(() => s.updateSettings({ theme: 'no-such-theme' }), StoreError);
   assert.throws(() => s.updateSettings({ theme: null }), StoreError);
   assert.equal(new Store(dir).getSettings().theme, 'blueprint');
@@ -345,7 +345,7 @@ test('settings saved before themes existed, or naming a removed theme, load with
   const write = (settings) => fs.writeFileSync(path.join(dir, 'events.json'),
     JSON.stringify({ version: 1, settings, events: [] }), { encoding: 'utf-8' });
   write({ displayId: 3 });
-  assert.deepEqual(new Store(dir).getSettings(), { displayId: 3, theme: 'midnight-teal' });
+  assert.deepEqual(new Store(dir).getSettings(), { displayId: 3, theme: 'midnight-teal', checkUpdates: true, lastUpdateCheck: null });
   write({ displayId: null, theme: 'gone-in-a-later-version' });
   assert.equal(new Store(dir).getSettings().theme, 'midnight-teal');
   write({ displayId: null, theme: 'vibe-with-claude' });
@@ -509,6 +509,21 @@ test('practice: rejects missing files and non-PDFs, and cleans up after a crash'
   assert.equal(libFiles().length, 1);
   new Store(dir);
   assert.equal(libFiles().length, 0);
+});
+
+test('update check settings persist, validate, and survive damaged files', () => {
+  const s = new Store(dir);
+  assert.equal(s.updateSettings({ checkUpdates: false }).checkUpdates, false);
+  const when = '2026-11-16T12:00:00.000Z';
+  assert.equal(s.updateSettings({ lastUpdateCheck: when }).lastUpdateCheck, when);
+  assert.deepEqual((({ checkUpdates, lastUpdateCheck }) => [checkUpdates, lastUpdateCheck])(new Store(dir).getSettings()), [false, when]);
+  assert.equal(s.updateSettings({ lastUpdateCheck: null }).lastUpdateCheck, null);
+  for (const bad of ['yes', 1, null]) assert.throws(() => s.updateSettings({ checkUpdates: bad }), /must be on or off/, String(bad));
+  for (const bad of ['yesterday-ish', 5, {}]) assert.throws(() => s.updateSettings({ lastUpdateCheck: bad }), /Invalid update check time/, String(bad));
+  fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify({
+    version: 1, settings: { displayId: null, checkUpdates: 'maybe', lastUpdateCheck: 'garbage' }, events: [],
+  }), { encoding: 'utf-8' });
+  assert.deepEqual((({ checkUpdates, lastUpdateCheck }) => [checkUpdates, lastUpdateCheck])(new Store(dir).getSettings()), [true, null]);
 });
 
 test('corrupt events.json is backed up, not lost', () => {

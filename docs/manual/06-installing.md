@@ -51,6 +51,16 @@ If macOS instead says it *could not verify* PK Player, or that it *is damaged an
 
 **Linux:** no warning.
 
+## Updates
+
+PK Player tells you when a newer version exists. It never downloads or installs anything by itself.
+
+- **How it finds out:** a few seconds after it starts, at most once a day, PK Player asks GitHub which version is the latest. That is a single request for a public page. It carries no information about you, your events or your files; it identifies itself only as "PK-Player" and its version number. As with visiting any website, GitHub sees the internet address the request came from.
+- **What you see:** if a newer version exists, a bar at the top of the window says so, with **Download** (opens the release page in your browser) and **Later** (hides the bar until the next check). Nothing interrupts an event: the bar is only ever in the editor window.
+- **To check yourself:** **Help → Check for Updates…**. This also tells you when you already have the latest version, or when GitHub could not be reached.
+- **To switch it off:** untick **Help → Check for Updates Automatically**. PK Player then contacts nobody unless you choose Check for Updates….
+- **To update:** download the new installer and install it over the old one, exactly as the first time. Your events, PDFs and themes are kept.
+
 ## Where your data lives
 
 Events and the copied PDFs are stored in:

@@ -18,6 +18,7 @@ Useful environment variables:
 | Variable | Effect |
 | --- | --- |
 | `PKPLAY_DEBUG=1` | Verbose logging in the terminal and DevTools console. |
+| `PKPLAY_UPDATE_FEED=/path/to/file.json` | Read the "latest release" answer from a local file instead of GitHub. Used by the tests. |
 | `PKPLAY_DATA_DIR=/some/dir` | Use a separate data folder (also allows a second instance alongside your normal one). |
 
 ## Tests
@@ -132,6 +133,7 @@ The Windows build is unsigned, so SmartScreen warns on first launch. Signing it 
 | `src/lib/page-edit.js` | The plan for a page edit: which pages are kept, in what order, turned how. |
 | `src/main/pdf-edit.js` | Writes PDFs with pdf-lib: an edited copy of a deck, or a whole event as one file. Always a new file. |
 | `src/lib/page-range.js` | Which pages of a deck play: its first and last page, capped by Max slides. |
+| `src/lib/update-check.js`, `src/main/update-check.js` | The update notice: compare versions, ask GitHub, report. Never downloads anything. |
 | `src/lib/reader.js` | Reader view: zoom levels and text search. The window is `src/renderer/reader.{html,css,js}`. |
 | `src/lib/speedrun.js` | Speedrun test: the allowed speeds, timing and the end report. |
 | `src/lib/deck-label.js` | What the Play screen says about a deck; default presenter and title from PDF properties. |

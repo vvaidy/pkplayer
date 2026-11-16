@@ -26,12 +26,12 @@ test.afterEach(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-async function launch() {
+async function launch(extraEnv = {}) {
   // PK_E2E_EXECUTABLE=dist/mac-arm64/PK Player.app/Contents/MacOS/PK Player tests the packaged build.
   const exe = process.env.PK_E2E_EXECUTABLE;
   const app = await electron.launch({
     ...(exe ? { executablePath: path.resolve(ROOT, exe), args: [] } : { args: [ROOT] }),
-    env: { ...process.env, PKPLAY_DATA_DIR: dataDir, PKPLAY_DEBUG: '1' },
+    env: { ...process.env, PKPLAY_DATA_DIR: dataDir, PKPLAY_DEBUG: '1', ...extraEnv },
   });
   const editor = await app.firstWindow();
   await editor.waitForSelector('body[data-ready="1"]');
@@ -1033,6 +1033,89 @@ test('editor: the progress bar switch is per event, on by default, and persists'
   await editor2.locator('.event-item', { hasText: 'With Bar' }).click();
   await expect(editor2.locator('#showProgress')).toBeChecked();
   await app2.close();
+});
+
+test('editor: update notice shows a newer version, checks on request, and can be switched off', async () => {
+  // The app reads the "latest release" answer from this file, so the test never touches the network.
+  const feed = path.join(os.tmpdir(), `pk-feed-${process.pid}-${Date.now()}.json`);
+  const setFeed = (data) => fs.writeFileSync(feed, typeof data === 'string' ? data : JSON.stringify(data), 'utf-8');
+  const env = { PKPLAY_UPDATE_FEED: feed };
+  const settingsOnDisk = () => JSON.parse(fs.readFileSync(path.join(dataDir, 'events.json'), 'utf-8')).settings;
+  const editSettings = (patch) => {
+    const file = path.join(dataDir, 'events.json');
+    const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    Object.assign(data.settings, patch);
+    fs.writeFileSync(file, JSON.stringify(data), 'utf-8');
+  };
+  const helpItem = (app, label) => app.evaluate(({ Menu }, l) => {
+    const item = Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === l);
+    item.click();
+    return { type: item.type, checked: item.checked };
+  }, label);
+  try {
+    setFeed({ tag_name: 'v99.0.0', draft: false, prerelease: false, html_url: 'https://evil.example/download' });
+    let { app, editor } = await launch(env);
+    await app.evaluate(({ shell }) => {
+      globalThis.pkOpened = [];
+      shell.openExternal = async (url) => { globalThis.pkOpened.push(url); };
+    });
+    const version = await app.evaluate(({ app: a }) => a.getVersion());
+
+    // A few seconds after start, a banner appears. Nothing is downloaded and no dialog interrupts.
+    await expect(editor.locator('#updateBanner')).toBeHidden();
+    await expect(editor.locator('#updateBanner')).toBeVisible({ timeout: 12000 });
+    await expect(editor.locator('#updateText')).toHaveText(`PK Player 99.0.0 is available. You have ${version}.`);
+    expect(typeof settingsOnDisk().lastUpdateCheck).toBe('string');
+    await editor.screenshot({ path: path.join(SHOTS, 'update-banner.png') });
+    // Download opens this project's release page, never an address from the answer.
+    await editor.click('#updateDownload');
+    await expect.poll(() => app.evaluate(() => globalThis.pkOpened)).toEqual(['https://github.com/vvaidy/pkplayer/releases/latest']);
+    await editor.click('#updateLater');
+    await expect(editor.locator('#updateBanner')).toBeHidden();
+
+    // Help > Check for Updates… reports every outcome.
+    setFeed({ tag_name: `v${version}` });
+    await helpItem(app, 'Check for Updates…');
+    await expect(editor.locator('.toast.ok').last()).toHaveText(`You have the latest version (${version}).`);
+    await expect(editor.locator('#updateBanner')).toBeHidden();
+    setFeed('{ this is not json');
+    await helpItem(app, 'Check for Updates…');
+    await expect(editor.locator('.toast.error').last()).toContainText('Could not check for updates');
+    setFeed({ tag_name: 'v99.0.0' });
+    await helpItem(app, 'Check for Updates…');
+    await expect(editor.locator('#updateBanner')).toBeVisible();
+
+    // Already checked today: the next start does not check again by itself.
+    await app.close();
+    ({ app, editor } = await launch(env));
+    await editor.waitForTimeout(6500);
+    await expect(editor.locator('#updateBanner')).toBeHidden();
+
+    // Switched off in the Help menu: it stays off, and no automatic check runs even when one is due.
+    const toggled = await helpItem(app, 'Check for Updates Automatically');
+    expect(toggled).toEqual({ type: 'checkbox', checked: false });
+    expect(settingsOnDisk().checkUpdates).toBe(false);
+    await app.close();
+    editSettings({ lastUpdateCheck: null });
+    ({ app, editor } = await launch(env));
+    await editor.waitForTimeout(6500);
+    await expect(editor.locator('#updateBanner')).toBeHidden();
+    expect(settingsOnDisk().lastUpdateCheck).toBe(null);
+    // A check on request still works while automatic checks are off.
+    await helpItem(app, 'Check for Updates…');
+    await expect(editor.locator('#updateBanner')).toBeVisible();
+    await app.close();
+
+    // Without the test feed, an isolated data folder means no automatic check at all (so tests never call GitHub).
+    editSettings({ lastUpdateCheck: null, checkUpdates: true });
+    ({ app, editor } = await launch());
+    await editor.waitForTimeout(6500);
+    await expect(editor.locator('#updateBanner')).toBeHidden();
+    expect(settingsOnDisk().lastUpdateCheck).toBe(null);
+    await app.close();
+  } finally {
+    fs.rmSync(feed, { force: true });
+  }
 });
 
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {

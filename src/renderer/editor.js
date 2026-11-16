@@ -1082,6 +1082,19 @@ function wireControls() {
   pk.onMenu('practice', () => practice());
   pk.onMenu('openReader', () => guarded('Opening the reader', () => pk.readFile()));
   pk.onMenu('exportEvent', () => exportEventPdf());
+  // Update notice. A newer version shows a banner; a check the user asked for also reports the other outcomes.
+  pk.onUpdateStatus((status) => {
+    if (status.kind === 'newer') {
+      $('updateText').textContent = `PK Player ${status.latest} is available. You have ${status.current}.`;
+      $('updateBanner').hidden = false;
+    } else if (status.manual && status.kind === 'current') {
+      toast(`You have the latest version (${status.current}).`, 'ok');
+    } else if (status.manual) {
+      toast(`Could not check for updates: ${status.message}`, 'error', 6000);
+    }
+  });
+  $('updateDownload').addEventListener('click', () => guarded('Opening the download page', () => pk.openDownloadPage()));
+  $('updateLater').addEventListener('click', () => { $('updateBanner').hidden = true; });
   // A deck's pages were edited (or restored) in a reader window: show its new page count and picture.
   pk.onItemsChanged(async ({ eventId }) => {
     await refreshEvents();

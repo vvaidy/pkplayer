@@ -6,11 +6,13 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PRACTICE_EVENT_ID, Store, isPdfFile } from './src/main/store.js';
-import { buildHelpMenu } from './src/main/help-menu.js';
+import { buildHelpMenu, openHelpLink } from './src/main/help-menu.js';
 import { exportTheme, isCustomThemeId, parseThemeFile, themeVars } from './src/lib/themes.js';
 import { parseSpeedrun } from './src/lib/speedrun.js';
 import { playedPages } from './src/lib/page-range.js';
 import { mergePdfs, rewritePdf } from './src/main/pdf-edit.js';
+import { DOWNLOAD_URL, checkIsDue } from './src/lib/update-check.js';
+import { checkForUpdate } from './src/main/update-check.js';
 import { debug } from './src/lib/debug.js';
 
 // ---------- app parameters ----------
@@ -20,6 +22,11 @@ const EDITOR_URL = 'app://bundle/src/renderer/editor.html';
 const PLAYER_URL = 'app://bundle/src/renderer/player.html';
 const READER_URL = 'app://bundle/src/renderer/reader.html';
 const DEBUG_QUERY = process.env.PKPLAY_DEBUG === '1' ? '&debug=1' : '';
+/** Tests point this at a local JSON file so the update check never touches the network. */
+const UPDATE_FEED_FILE = process.env.PKPLAY_UPDATE_FEED || null;
+/** With an isolated data folder (tests, experiments) the app does not phone GitHub on its own. */
+const AUTO_UPDATE_CHECK_ALLOWED = !process.env.PKPLAY_DATA_DIR || Boolean(UPDATE_FEED_FILE);
+const UPDATE_CHECK_DELAY_MS = 4000; // let the window settle first
 const THEME_FILE_MAX_BYTES = 512 * 1024; // theme files are a few KB; refuse anything that is clearly not one
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -300,6 +307,34 @@ function closePlayer() {
   return win.closing;
 }
 
+// ---------- update notice ----------
+
+/**
+ * Ask whether a newer version exists and tell the editor. It only ever tells: nothing is
+ * downloaded or installed. `manual` is true when the user chose "Check for Updates…",
+ * in which case "you are up to date" and errors are reported too; automatic checks stay silent.
+ */
+async function runUpdateCheck({ manual }) {
+  const result = await checkForUpdate({ currentVersion: app.getVersion(), feedFile: UPDATE_FEED_FILE });
+  try {
+    if (result.kind !== 'error') store.updateSettings({ lastUpdateCheck: new Date().toISOString() });
+  } catch (err) {
+    debug('update', 'could not record the update check', err);
+  }
+  debug('update', `check (${manual ? 'manual' : 'automatic'}): ${result.kind}${result.latest ? ` ${result.latest}` : ''}`);
+  if (manual || result.kind === 'newer') editorWin?.webContents.send('update:status', { ...result, manual });
+  return result;
+}
+
+function scheduleAutomaticUpdateCheck() {
+  if (!AUTO_UPDATE_CHECK_ALLOWED) return;
+  setTimeout(() => {
+    const { checkUpdates, lastUpdateCheck } = store.getSettings();
+    if (!checkUpdates || !checkIsDue(lastUpdateCheck)) return;
+    runUpdateCheck({ manual: false }).catch((err) => debug('update', 'automatic check failed', err));
+  }, UPDATE_CHECK_DELAY_MS);
+}
+
 // ---------- IPC ----------
 
 /** One deck of a real event (never the practice deck), or an error fit to show the user. */
@@ -370,6 +405,7 @@ function registerIpc() {
     if (patch && 'theme' in patch) syncWindowColor();
     return settings;
   });
+  handle('update:openDownload', () => openHelpLink(DOWNLOAD_URL, (url) => shell.openExternal(url)));
   handle('themes:list', () => store.listThemes());
   handle('themes:save', (theme) => {
     const saved = store.saveTheme(theme);
@@ -524,6 +560,28 @@ function registerIpc() {
 
 // ---------- menu ----------
 
+/** The Help menu, with the two update items on top. */
+function helpMenuWithUpdates() {
+  const help = buildHelpMenu((url) => shell.openExternal(url));
+  help.submenu.unshift(
+    { label: 'Check for Updates…', click: () => runUpdateCheck({ manual: true }).catch((err) => debug('update', 'manual check failed', err)) },
+    {
+      label: 'Check for Updates Automatically',
+      type: 'checkbox',
+      checked: store.getSettings().checkUpdates,
+      click: (item) => {
+        try {
+          store.updateSettings({ checkUpdates: item.checked });
+        } catch (err) {
+          debug('update', 'could not save the update setting', err);
+        }
+      },
+    },
+    { type: 'separator' },
+  );
+  return help;
+}
+
 function buildMenu() {
   const isMac = process.platform === 'darwin';
   const template = [
@@ -551,7 +609,7 @@ function buildMenu() {
       submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }],
     },
     { role: 'windowMenu' },
-    buildHelpMenu((url) => shell.openExternal(url)),
+    helpMenuWithUpdates(),
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -583,6 +641,7 @@ if (!gotLock) {
     registerIpc();
     buildMenu();
     createEditorWindow();
+    scheduleAutomaticUpdateCheck();
 
     const notifyDisplays = () => editorWin?.webContents.send('displays:changed', listDisplays());
     screen.on('display-added', notifyDisplays);
