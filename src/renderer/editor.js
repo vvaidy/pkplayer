@@ -654,6 +654,25 @@ async function practice() {
   await guarded('Starting practice', () => pk.practice(opts));
 }
 
+/** Save everything the selected event plays as one PDF, in playlist order. */
+async function exportEventPdf() {
+  const ev = selected();
+  if (!ev || ev.items.length === 0) {
+    toast('Add at least one PDF before exporting.');
+    return;
+  }
+  showBusy('Exporting…');
+  try {
+    const res = await guarded('Exporting the event', () => pk.exportEventPdf(ev.id));
+    if (!res) return; // cancelled, or the error was already shown
+    const name = res.file.split(/[\\/]/).pop();
+    const skipped = res.skipped ? ` ${res.skipped} unreadable deck${res.skipped === 1 ? ' was' : 's were'} left out.` : '';
+    toast(`Exported ${res.pageCount} page${res.pageCount === 1 ? '' : 's'} to ${name}.${skipped}`, res.skipped ? 'error' : 'ok', 6000);
+  } finally {
+    hideBusy();
+  }
+}
+
 // ---------- speedrun test ----------
 
 /**
@@ -1054,6 +1073,13 @@ function wireControls() {
   pk.onMenu('newEvent', () => newEvent());
   pk.onMenu('practice', () => practice());
   pk.onMenu('openReader', () => guarded('Opening the reader', () => pk.readFile()));
+  pk.onMenu('exportEvent', () => exportEventPdf());
+  // A deck's pages were edited (or restored) in a reader window: show its new page count and picture.
+  pk.onItemsChanged(async ({ eventId }) => {
+    await refreshEvents();
+    if (eventId === state.selectedId) await selectEvent(eventId);
+    else renderSidebar();
+  });
   pk.onMenu('speedrun', () => openSpeedrunDialog());
   pk.onMenu('addPdfs', () => (selected() ? addPdfsViaDialog() : toast('Create or select an event first.')));
   pk.onPlayerClosed(async ({ eventId }) => {

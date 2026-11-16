@@ -9,6 +9,8 @@ import { PRACTICE_EVENT_ID, Store, isPdfFile } from './src/main/store.js';
 import { buildHelpMenu } from './src/main/help-menu.js';
 import { exportTheme, isCustomThemeId, parseThemeFile, themeVars } from './src/lib/themes.js';
 import { parseSpeedrun } from './src/lib/speedrun.js';
+import { playedPages } from './src/lib/page-range.js';
+import { mergePdfs, rewritePdf } from './src/main/pdf-edit.js';
 import { debug } from './src/lib/debug.js';
 
 // ---------- app parameters ----------
@@ -154,6 +156,25 @@ function createEditorWindow() {
   });
 }
 
+/** The address of a reader page for one PDF. `extra` adds parameters such as { view: 'grid' }. */
+function readerUrl(src, name, played = {}, extra = {}) {
+  const query = new URLSearchParams({ src, name, ...themeParams(), ...extra });
+  for (const [param, value] of [['max', played.maxSlides], ['first', played.firstPage], ['last', played.lastPage]]) {
+    if (Number.isInteger(value) && value > 0) query.set(param, String(value));
+  }
+  return `${READER_URL}?${query}${DEBUG_QUERY}`;
+}
+
+/** Everything a reader window needs to show one of an event's decks, including what it may edit. */
+function readerItemArgs(event, item) {
+  return [
+    `library/${item.file}`,
+    item.name,
+    { maxSlides: event.maxSlides, firstPage: item.firstPage, lastPage: item.lastPage },
+    { event: event.id, item: item.id, ...(item.originalFile ? { edited: '1' } : {}) },
+  ];
+}
+
 /**
  * Open a PDF in a reader window: an ordinary, resizable window for reading, not presenting.
  * @param {string} src "library/<file>" or "external/<token>"
@@ -161,7 +182,7 @@ function createEditorWindow() {
  * @param {object} [played] for a deck opened from an event: { maxSlides, firstPage, lastPage }, so the
  *   reader can mark the pages that event will not play
  */
-function openReader(src, name, played = {}) {
+function openReader(src, name, played = {}, extra = {}) {
   const win = new BrowserWindow({
     width: 1100,
     height: 820,
@@ -173,11 +194,7 @@ function openReader(src, name, played = {}) {
     webPreferences: secureWebPrefs,
   });
   readerWins.add(win);
-  const query = new URLSearchParams({ src, name, ...themeParams() });
-  for (const [param, value] of [['max', played.maxSlides], ['first', played.firstPage], ['last', played.lastPage]]) {
-    if (Number.isInteger(value) && value > 0) query.set(param, String(value));
-  }
-  win.loadURL(`${READER_URL}?${query}${DEBUG_QUERY}`);
+  win.loadURL(readerUrl(src, name, played, extra));
   win.once('ready-to-show', () => win.show());
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' })); // links inside a PDF open nothing
@@ -285,6 +302,38 @@ function closePlayer() {
 
 // ---------- IPC ----------
 
+/** One deck of a real event (never the practice deck), or an error fit to show the user. */
+function findDeck(eventId, itemId) {
+  if (eventId === PRACTICE_EVENT_ID) throw new Error('A practice deck cannot be edited.');
+  const event = store.getEvent(eventId);
+  const item = event.items.find((it) => it.id === itemId);
+  if (!item) throw new Error('That deck is no longer in the playlist.');
+  return { event, item };
+}
+
+/** After a deck's pages changed: tell the editor, and show the reader window the new file, back on its grid. */
+function afterPagesChanged(win, eventId, itemId) {
+  const { event, item } = findDeck(eventId, itemId);
+  editorWin?.webContents.send('items:changed', { eventId });
+  if (win && !win.isDestroyed() && readerWins.has(win)) {
+    const [src, name, played, extra] = readerItemArgs(event, item);
+    win.loadURL(readerUrl(src, name, played, { ...extra, view: 'grid' }));
+  }
+  return { pageCount: item.pageCount };
+}
+
+/** Like handle(), but `fn` also receives the window that asked, as its first argument. */
+function handleFrom(channel, fn) {
+  ipcMain.handle(channel, async (e, ...args) => {
+    try {
+      return { ok: true, value: await fn(BrowserWindow.fromWebContents(e.sender), ...args) };
+    } catch (err) {
+      debug('ipc', `${channel} failed`, err);
+      return { ok: false, error: err.message };
+    }
+  });
+}
+
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_e, ...args) => {
     try {
@@ -374,10 +423,53 @@ function registerIpc() {
   handle('player:open', (eventId, startItemId) => openPlayer(eventId, startItemId));
   // Reader: one of an event's decks...
   handle('reader:openItem', (eventId, itemId) => {
+    const { event, item } = findDeck(eventId, itemId);
+    const [src, name, played, extra] = readerItemArgs(event, item);
+    return openReader(src, name, played, extra);
+  });
+  // Page edits. The deck's PDF is rebuilt as a NEW library file; the copy it was added with is kept.
+  handleFrom('pages:apply', async (win, eventId, itemId, pages) => {
+    const { item } = findDeck(eventId, itemId);
+    const newFile = store.newLibraryFile();
+    const dest = store.libraryPath(newFile);
+    const { pageCount } = await rewritePdf(store.libraryPath(item.file), dest, pages);
+    try {
+      store.replaceItemFile(eventId, itemId, newFile, pageCount);
+    } catch (err) {
+      await fs.promises.rm(dest, { force: true }).catch(() => {});
+      throw err;
+    }
+    return afterPagesChanged(win, eventId, itemId);
+  });
+  handleFrom('pages:restore', (win, eventId, itemId) => {
+    findDeck(eventId, itemId);
+    store.restoreItemOriginal(eventId, itemId);
+    return afterPagesChanged(win, eventId, itemId);
+  });
+  // One PDF of everything the event plays: each deck's page range, capped by Max slides, in playlist order.
+  handle('events:exportPdf', async (eventId) => {
+    if (eventId === PRACTICE_EVENT_ID) throw new Error('Practice has nothing to export.');
     const event = store.getEvent(eventId);
-    const item = event.items.find((it) => it.id === itemId);
-    if (!item) throw new Error('That deck is no longer in the playlist.');
-    return openReader(`library/${item.file}`, item.name, { maxSlides: event.maxSlides, firstPage: item.firstPage, lastPage: item.lastPage });
+    if (!event.items.length) throw new Error('Add at least one PDF before exporting.');
+    const safeName = event.name.replace(/[^\w .-]+/g, ' ').trim() || 'event';
+    const res = await dialog.showSaveDialog(editorWin, {
+      title: 'Export Event as One PDF',
+      defaultPath: `${safeName}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (res.canceled || !res.filePath) return null;
+    if (path.dirname(path.resolve(res.filePath)) === path.resolve(store.libraryDir)) {
+      throw new Error("Choose a folder other than PK Player's own library.");
+    }
+    const parts = event.items.map((item) => ({
+      path: store.libraryPath(item.file),
+      pages: (count) => {
+        const played = playedPages(item, count, event.maxSlides);
+        return Array.from({ length: played.count }, (_, i) => ({ page: played.first + i }));
+      },
+    }));
+    const { pageCount, skipped } = await mergePdfs(parts, res.filePath, { title: event.name });
+    return { file: res.filePath, pageCount, skipped: skipped.length };
   });
   // ...or any PDF the user picks. Returns false if the file dialog was cancelled.
   handle('reader:openFile', async () => {
@@ -442,6 +534,7 @@ function buildMenu() {
         { label: 'New Event', accelerator: 'CmdOrCtrl+N', click: () => editorWin?.webContents.send('menu:newEvent') },
         { label: 'Add PDFs…', accelerator: 'CmdOrCtrl+O', click: () => editorWin?.webContents.send('menu:addPdfs') },
         { label: 'Open PDF in Reader…', accelerator: 'CmdOrCtrl+Shift+O', click: () => editorWin?.webContents.send('menu:openReader') },
+        { label: 'Export Event as One PDF…', click: () => editorWin?.webContents.send('menu:exportEvent') },
         { type: 'separator' },
         { label: 'Practice a PDF…', accelerator: 'CmdOrCtrl+Shift+P', click: () => editorWin?.webContents.send('menu:practice') },
         // No keyboard shortcut on purpose: a speedrun should never start by accident.

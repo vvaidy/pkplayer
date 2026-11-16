@@ -19,13 +19,13 @@
     "dist:linux": "electron-builder --linux"
   },
   "dependencies": {
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
     "electron": "^45.2.3",
-    "electron-builder": "^26.18.0",
-    "pdf-lib": "^1.17.1"
+    "electron-builder": "^26.18.0"
   },
   "allowScripts": {
     "electron-winstaller": false

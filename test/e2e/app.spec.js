@@ -855,6 +855,155 @@ test('editor: a deck can play a page range, and counts, warnings and the reader 
   await app2.close();
 });
 
+test('reader: edit pages (remove, rotate, reorder), save a new copy, restore the original, export the event', async () => {
+  const { app, editor } = await launch();
+  // 1 s per slide, 4 slides max: alpha has 5 pages, bravo 25.
+  await setupEvent(app, editor, { files: [fx('alpha-5-slides.pdf'), fx('bravo-25-slides.pdf')] });
+  const lib = path.join(dataDir, 'library');
+  const savedItem = (i) => JSON.parse(fs.readFileSync(path.join(dataDir, 'events.json'), 'utf-8')).events[0].items[i];
+  const pagesOf = async (file) => (await PDFDocument.load(fs.readFileSync(file))).getPages().map((pg) => pg.getRotation().angle);
+  const openGrid = async (rowIndex) => {
+    const [win] = await Promise.all([app.waitForEvent('window'), editor.locator('.row').nth(rowIndex).locator('.read').click()]);
+    await win.waitForSelector('body[data-ready="1"]');
+    await win.click('#toggleGrid');
+    return win;
+  };
+  const row = editor.locator('.row').first();
+  const badges = (r) => r.locator('.badge').allTextContents();
+  const original = savedItem(0).file;
+  const originalBytes = fs.readFileSync(path.join(lib, original));
+
+  // A page range set before editing is cleared by the edit, because its numbers would mean other pages.
+  await row.locator('.range-input.firstPage').fill('2');
+  await row.locator('.range-input.firstPage').press('Enter');
+  await expect(row.locator('.badge').nth(1)).toHaveText('plays pages 2–5');
+
+  const reader = await openGrid(0);
+  await expect(reader.locator('#editPages')).toBeVisible();
+  await expect(reader.locator('#restorePages')).toBeHidden(); // nothing to restore yet
+  await reader.click('#editPages');
+  await expect(reader.locator('#editBar')).toBeVisible();
+  await expect(reader.locator('.edit-tile')).toHaveCount(5);
+  await expect(reader.locator('#editStatus')).toHaveText('No changes yet');
+  await expect(reader.locator('#editSave')).toBeDisabled();
+  const tile = (pos) => reader.locator('.edit-tile').nth(pos);
+  const order = () => reader.locator('.edit-tile').evaluateAll((els) => els.map((el) => Number(el.dataset.src) + 1));
+
+  // Remove page 2, bring it back, remove it again.
+  await tile(1).locator('.remove').click();
+  await expect(tile(1)).toHaveClass(/removed/);
+  await expect(reader.locator('#editStatus')).toHaveText('1 page removed · 4 pages will remain');
+  await expect(reader.locator('#editSave')).toBeEnabled();
+  await tile(1).locator('.remove').click();
+  await expect(reader.locator('#editStatus')).toHaveText('No changes yet');
+  await tile(1).locator('.remove').click();
+  // Rotate page 1 a quarter turn.
+  await tile(0).locator('.rotate').click();
+  await expect(reader.locator('#editStatus')).toHaveText('1 page removed, 1 rotated · 4 pages will remain');
+  // Move page 5 to the front with the buttons, then check the order.
+  for (let pos = 4; pos > 0; pos -= 1) await tile(pos).locator('.move-left').click();
+  expect(await order()).toEqual([5, 1, 2, 3, 4]);
+  await expect(reader.locator('#editStatus')).toHaveText('1 page removed, 1 rotated, order changed · 4 pages will remain');
+  await expect(tile(0).locator('.move-left')).toBeDisabled();
+  // Dragging a page onto another moves it there.
+  await tile(4).dragTo(tile(3));
+  expect(await order()).toEqual([5, 1, 2, 4, 3]);
+  await tile(3).dragTo(tile(4));
+  expect(await order()).toEqual([5, 1, 2, 3, 4]);
+  await reader.screenshot({ path: path.join(SHOTS, 'reader-edit.png') });
+
+  // A deck must keep at least one page.
+  await reader.click('#editReset');
+  await expect(reader.locator('#editStatus')).toHaveText('No changes yet');
+  for (let pos = 0; pos < 5; pos += 1) await tile(pos).locator('.remove').click();
+  await expect(reader.locator('#editStatus')).toHaveText('A deck must keep at least one page.');
+  await expect(reader.locator('#editSave')).toBeDisabled();
+
+  // Cancel asks before throwing work away; Esc does the same.
+  reader.once('dialog', (d) => d.dismiss());
+  await reader.click('#editCancel');
+  await expect(reader.locator('#editBar')).toBeVisible();
+  reader.once('dialog', (d) => d.accept());
+  await reader.keyboard.press('Escape');
+  await expect(reader.locator('#editBar')).toBeHidden();
+  await expect(reader.locator('#gridTiles .thumb-item')).toHaveCount(5); // the ordinary grid is back
+  expect(fs.readdirSync(lib).length).toBe(2); // and nothing was written
+
+  // Do the edit for real and save it.
+  await reader.click('#editPages');
+  await tile(1).locator('.remove').click();
+  await tile(0).locator('.rotate').click();
+  for (let pos = 4; pos > 0; pos -= 1) await tile(pos).locator('.move-left').click();
+  await reader.click('#editSave');
+  await reader.waitForSelector('body[data-pages="4"][data-ready="1"]'); // the window reloaded on the new file
+  await expect(reader.locator('body')).toHaveAttribute('data-view', 'grid');
+  await expect(reader.locator('#gridTiles .thumb-item')).toHaveCount(4);
+  await expect(reader.locator('#restorePages')).toBeVisible();
+
+  // On disk: a new copy with the edits, and the original untouched and still kept.
+  const item = savedItem(0);
+  expect(item.file).not.toBe(original);
+  expect(item.originalFile).toBe(original);
+  expect([item.pageCount, item.firstPage, item.lastPage]).toEqual([4, null, null]);
+  expect(await pagesOf(path.join(lib, item.file))).toEqual([0, 90, 0, 0]); // page 5 first, then page 1 turned, then 3 and 4
+  expect(originalBytes.equals(fs.readFileSync(path.join(lib, original)))).toBe(true);
+  expect(fs.readdirSync(lib).length).toBe(3);
+  // The first page really is the old page 5.
+  await reader.click('#toggleGrid');
+  await expect(reader.locator('.page').first().locator('.textLayer span').filter({ hasText: 'slide 5 of 5' })).toHaveCount(1);
+  // The editor row followed: 4 pages, no warning, and the page range is gone.
+  await expect.poll(() => badges(row)).toEqual(['4 pages', '0:04']);
+  await expect(row.locator('.range-input.firstPage')).toHaveValue('');
+
+  // Restore brings the deck back exactly, and removes the edited copy.
+  await reader.click('#toggleGrid');
+  reader.once('dialog', (d) => d.accept());
+  await reader.click('#restorePages');
+  await reader.waitForSelector('body[data-pages="5"][data-ready="1"]');
+  await expect(reader.locator('#restorePages')).toBeHidden();
+  expect(savedItem(0).file).toBe(original);
+  expect(savedItem(0).originalFile).toBe(null);
+  expect(fs.readdirSync(lib).length).toBe(2);
+  await expect.poll(() => badges(row)).toEqual(['5 pages', 'only first 4 play', '0:04']);
+  await reader.close();
+
+  // "Keep only the pages that play" trims a long deck to what the event shows.
+  const long = await openGrid(1);
+  await long.click('#editPages');
+  await expect(long.locator('#editKeepPlayed')).toBeVisible();
+  await long.click('#editKeepPlayed');
+  await expect(long.locator('#editStatus')).toHaveText('21 pages removed · 4 pages will remain');
+  await long.click('#editSave');
+  await long.waitForSelector('body[data-pages="4"][data-ready="1"]');
+  await expect.poll(() => badges(editor.locator('.row').nth(1))).toEqual(['4 pages', '0:04']);
+  await long.close();
+
+  // A PDF opened on its own cannot be edited: there is no deck to save the result to.
+  const clickMenu = (label) => app.evaluate(({ Menu }, l) => {
+    Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === l).click();
+  }, label);
+  await stubOpenDialog(app, [fx('charlie-3-slides.pdf')]);
+  const [loose] = await Promise.all([app.waitForEvent('window'), clickMenu('Open PDF in Reader…')]);
+  await loose.waitForSelector('body[data-ready="1"]');
+  await loose.click('#toggleGrid');
+  await expect(loose.locator('#gridActions')).toBeHidden();
+  expect(await loose.evaluate(() => window.pk.applyPages('nope', 'nope', [{ page: 1 }]).then(() => 'saved', (e) => e.message))).toContain('Event not found');
+  await loose.close();
+
+  // Export Event as One PDF: exactly what the event plays, in order.
+  const out = path.join(dataDir, 'whole-event.pdf');
+  await stubSaveDialog(app, out);
+  await clickMenu('Export Event as One PDF…');
+  await expect(editor.locator('.toast.ok').last()).toContainText('Exported 8 pages to whole-event.pdf'); // 4 of alpha's 5 + bravo's 4
+  expect((await pagesOf(out)).length).toBe(8);
+  // Exporting into the app's own library is refused.
+  await stubSaveDialog(app, path.join(lib, 'sneaky.pdf'));
+  await clickMenu('Export Event as One PDF…');
+  await expect(editor.locator('.toast.error').last()).toContainText("other than PK Player's own library");
+  expect(fs.existsSync(path.join(lib, 'sneaky.pdf'))).toBe(false);
+  await app.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });

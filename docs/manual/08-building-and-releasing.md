@@ -129,6 +129,8 @@ The Windows build is unsigned, so SmartScreen warns on first launch. Signing it 
 | `src/lib/presets.js` | The Format presets (PechaKucha, Ignite). |
 | `src/lib/preflight.js` | Deck warnings: short decks and odd page shapes. |
 | `src/lib/themes.js` | The color themes and the math that derives each theme's full palette. `src/renderer/theme.js` applies one to a window. |
+| `src/lib/page-edit.js` | The plan for a page edit: which pages are kept, in what order, turned how. |
+| `src/main/pdf-edit.js` | Writes PDFs with pdf-lib: an edited copy of a deck, or a whole event as one file. Always a new file. |
 | `src/lib/page-range.js` | Which pages of a deck play: its first and last page, capped by Max slides. |
 | `src/lib/reader.js` | Reader view: zoom levels and text search. The window is `src/renderer/reader.{html,css,js}`. |
 | `src/lib/speedrun.js` | Speedrun test: the allowed speeds, timing and the end report. |

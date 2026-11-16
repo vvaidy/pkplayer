@@ -2,7 +2,7 @@
 // Opens windows and goes FULLSCREEN — don't run while you're using the computer.
 // Usage: node scripts/capture-docs-screens.js     (writes docs/manual/img/*.png)
 //        PK_DOCS_EDITOR_ONLY=1 node scripts/capture-docs-screens.js
-//          only the editor and reader screenshots (01-06, 12-14): normal windows, nothing fullscreen
+//          only the editor and reader screenshots (01-06, 12-15): normal windows, nothing fullscreen
 import { _electron as electron } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -96,6 +96,16 @@ async function main() {
     await grid.locator('#gridTiles .thumb-item').nth(11).locator('canvas').waitFor({ timeout: 8000 }).catch(() => {});
     await grid.waitForTimeout(700);
     await shot(grid, '14-reader-grid.png');
+
+    // Edit pages on the same deck: one page turned, one removed, and the pages that will not play trimmed.
+    await grid.click('#editPages');
+    await grid.locator('.edit-tile').nth(1).locator('.rotate').click();
+    await grid.locator('.edit-tile').nth(2).locator('.remove').click();
+    await grid.locator('.edit-tile').nth(3).locator('canvas').waitFor({ timeout: 8000 }).catch(() => {});
+    await grid.waitForTimeout(600);
+    await shot(grid, '15-edit-pages.png');
+    grid.once('dialog', (d) => d.accept());
+    await grid.click('#editCancel');
     await grid.close();
 
     // Drop overlay (normally shown while dragging files over the window).

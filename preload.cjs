@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('pk', {
   practice: (opts) => call('practice:start', opts),
   readItem: (eventId, itemId) => call('reader:openItem', eventId, itemId),
   readFile: () => call('reader:openFile'),
+  applyPages: (eventId, itemId, pages) => call('pages:apply', eventId, itemId, pages),
+  restorePages: (eventId, itemId) => call('pages:restore', eventId, itemId),
+  exportEventPdf: (eventId) => call('events:exportPdf', eventId),
   speedrun: (eventId, factor) => call('player:speedrun', eventId, factor),
   closePlayer: () => call('player:close'),
   enterFullscreen: () => call('player:fullscreen'),
@@ -49,6 +52,7 @@ contextBridge.exposeInMainWorld('pk', {
   /** Real filesystem path of a dropped File (Electron removed File.path). */
   pathForFile: (file) => webUtils.getPathForFile(file),
   onPlayerClosed: (fn) => on('player:closed', fn),
+  onItemsChanged: (fn) => on('items:changed', fn),
   onDisplaysChanged: (fn) => on('displays:changed', fn),
   onMenu: (name, fn) => on(`menu:${name}`, fn),
 });

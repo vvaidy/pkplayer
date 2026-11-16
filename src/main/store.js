@@ -120,6 +120,8 @@ export class Store {
             title: cleanText(it.title),
             firstPage: storedPage(it.firstPage), // null = from page 1; absent in files written before 1.3
             lastPage: storedPage(it.lastPage), // null = to the end
+            // Set once a deck's pages have been edited: the copy as it was added, kept so it can be restored.
+            originalFile: it.originalFile ? path.basename(String(it.originalFile)) : null,
           })),
         createdAt: e.createdAt || new Date().toISOString(),
       }));
@@ -249,7 +251,7 @@ export class Store {
         const id = newId();
         const file = `${id}.pdf`;
         fs.copyFileSync(p, this.libraryPath(file));
-        added.push({ id, name: cleanName(path.basename(p), 'Untitled.pdf'), file, pageCount: null, presenter: '', title: '', firstPage: null, lastPage: null });
+        added.push({ id, name: cleanName(path.basename(p), 'Untitled.pdf'), file, pageCount: null, presenter: '', title: '', firstPage: null, lastPage: null, originalFile: null });
         debug('store', `imported ${p} -> ${file}`);
       } catch (err) {
         debug('store', `failed to import ${p}`, err);
@@ -332,6 +334,50 @@ export class Store {
     return this.#clone(it);
   }
 
+  /** A new, unused file name in the library, for an edited copy of a deck. */
+  newLibraryFile() {
+    return `${newId()}.pdf`;
+  }
+
+  /**
+   * Point a deck at an edited copy of its PDF (already written to the library as `newFile`).
+   * The copy the deck was added with is remembered so the edit can be undone, the page
+   * range is cleared (its page numbers no longer mean the same pages), and library files
+   * nothing uses any more are removed.
+   */
+  replaceItemFile(eventId, itemId, newFile, pageCount) {
+    const ev = this.#event(eventId);
+    const it = ev.items.find((x) => x.id === itemId);
+    if (!it) throw new StoreError(`Playlist item not found: ${itemId}`);
+    const file = path.basename(String(newFile));
+    if (!file.endsWith('.pdf') || !fs.existsSync(this.libraryPath(file))) throw new StoreError('The edited PDF was not found in the library');
+    if (!it.originalFile) it.originalFile = it.file;
+    it.file = file;
+    it.pageCount = Number.isInteger(pageCount) && pageCount >= 0 ? pageCount : null;
+    it.firstPage = null;
+    it.lastPage = null;
+    this.#save();
+    this.gcLibrary();
+    return this.#clone(it);
+  }
+
+  /** Undo every page edit on a deck: go back to the PDF as it was added. */
+  restoreItemOriginal(eventId, itemId) {
+    const ev = this.#event(eventId);
+    const it = ev.items.find((x) => x.id === itemId);
+    if (!it) throw new StoreError(`Playlist item not found: ${itemId}`);
+    if (!it.originalFile) throw new StoreError('This deck has not been edited, so there is nothing to restore');
+    if (!fs.existsSync(this.libraryPath(it.originalFile))) throw new StoreError('The original copy of this deck is no longer in the library');
+    it.file = it.originalFile;
+    it.originalFile = null;
+    it.pageCount = null; // re-read from the file
+    it.firstPage = null;
+    it.lastPage = null;
+    this.#save();
+    this.gcLibrary();
+    return this.#clone(it);
+  }
+
   setItemPageCount(eventId, itemId, pageCount) {
     const ev = this.#event(eventId, { allowPractice: true });
     const it = ev.items.find((x) => x.id === itemId);
@@ -347,7 +393,7 @@ export class Store {
 
   /** Delete library files that no event references any more. Returns the number removed. */
   gcLibrary() {
-    const used = new Set(this.data.events.flatMap((e) => e.items.map((it) => it.file)));
+    const used = new Set(this.data.events.flatMap((e) => e.items.flatMap((it) => [it.file, it.originalFile])));
     for (const it of this.practice?.items || []) used.add(it.file);
     let removed = 0;
     try {
@@ -402,7 +448,7 @@ export class Store {
       name: `Practice: ${name}`,
       timePerSlide: inRange(timePerSlide, LIMITS.timePerSlide) ? Number(timePerSlide) : DEFAULT_TIME_PER_SLIDE,
       maxSlides: inRange(maxSlides, LIMITS.maxSlides) && Number.isInteger(Number(maxSlides)) ? Number(maxSlides) : DEFAULT_MAX_SLIDES,
-      items: [{ id, name, file, pageCount: null, presenter: '', title: '', firstPage: null, lastPage: null }],
+      items: [{ id, name, file, pageCount: null, presenter: '', title: '', firstPage: null, lastPage: null, originalFile: null }],
       createdAt: new Date().toISOString(),
     };
     this.#removePracticeFiles(file); // the previous practice deck, if any

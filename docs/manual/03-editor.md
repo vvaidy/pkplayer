@@ -138,10 +138,40 @@ The reader opens a PDF in an ordinary window for reading, not presenting. Use it
 
 Things to know:
 
-- The reader never changes a file. There is nothing to save.
+- Reading never changes a file. The one thing that does is [Edit pages](#editing-a-decks-pages), and only when you save.
 - Every page of the PDF is shown, including pages the event will not play: those beyond Max slides and those outside the deck's [page range](#page-range). When you open a deck from the playlist, those pages are dimmed and labelled **not played** in the thumbnails and the grid, and the grid says which pages the event will play. A PDF opened from the File menu belongs to no event, so nothing is marked.
 - Search finds text that is real text in the PDF. Words that are part of a picture are not found, and a phrase that breaks across two lines is not found as one match.
 - You can have several reader windows open. They close when you close the main window.
+
+## Editing a deck's pages
+
+When a deck needs more than a [page range](#page-range) can do, you can remove, reorder and rotate its pages.
+
+1. Open the deck in the [reader](#reader) from its playlist row and click **Grid**.
+2. Click **Edit pages…**. Each page gets four buttons: **←** and **→** move it, **↻** turns it a quarter turn, **✕** removes it (and **Keep** brings it back). You can also drag a page onto another to move it there.
+3. A line at the top says what will change, for example *1 page removed, 1 rotated, order changed · 19 pages will remain*.
+4. Click **Save changes**, or **Cancel** (or **Esc**) to leave everything as it was.
+
+![Editing a deck's pages in the reader's grid](img/15-edit-pages.png)
+
+**Keep only the pages that play** removes every page the event would not show, which trims an over-long deck to Max slides in one click. **Undo all** puts every page back before you save.
+
+What happens to the files:
+
+- **The presenter's file is never touched.** PK Player works on its own copy in the library.
+- **Saving writes a new copy** with your changes and keeps the copy the deck was added with. **Restore original pages**, in the grid, goes back to it at any time, however many edits you have saved.
+- Saving clears the deck's page range, because its page numbers would now point at different pages. Set it again if you still want one.
+- Only this row changes. If you duplicated the event, the other event's deck is unaffected.
+- A password-protected PDF cannot be edited; PK Player says so and changes nothing.
+- A PDF opened with **File → Open PDF in Reader…** has no Edit pages button, because it belongs to no event.
+
+Editing pages keeps each page exactly as it is drawn. It cannot change the text or pictures on a page.
+
+## Exporting an event as one PDF
+
+**File → Export Event as One PDF…** writes a single PDF of everything the selected event plays, in playlist order: each deck's page range, capped by Max slides. Pages that would not play are left out. Use it for a backup, to hand the whole night to someone, or to check the running order in any PDF viewer.
+
+Decks that cannot be read are left out, and the message tells you how many. Your events and decks are not changed.
 
 ## Speedrun test
 

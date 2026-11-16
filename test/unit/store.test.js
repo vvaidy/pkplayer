@@ -223,6 +223,55 @@ test('page range: old files load with no range, damaged values are dropped, and 
   assert.deepEqual([copy.firstPage, copy.lastPage], [2, 21]);
 });
 
+test('page edits: a deck moves to its edited copy, keeps the original, and can be restored', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  const id = added[0].id;
+  const original = added[0].file;
+  s.updateItem(ev.id, id, { presenter: 'Asha', firstPage: 2, lastPage: 9 });
+  s.setItemPageCount(ev.id, id, 20);
+
+  const edited = s.newLibraryFile();
+  assert.notEqual(edited, original);
+  fs.copyFileSync(path.join(dir, 'library', original), path.join(dir, 'library', edited));
+  const it = s.replaceItemFile(ev.id, id, edited, 12);
+  assert.deepEqual([it.file, it.originalFile, it.pageCount, it.firstPage, it.lastPage, it.presenter], [edited, original, 12, null, null, 'Asha']);
+  assert.deepEqual(libFiles(), [edited, original].sort()); // the original is kept for Restore
+
+  // A second edit keeps the FIRST original, and the intermediate copy is cleaned up.
+  const edited2 = s.newLibraryFile();
+  fs.copyFileSync(path.join(dir, 'library', original), path.join(dir, 'library', edited2));
+  assert.equal(s.replaceItemFile(ev.id, id, edited2, 7).originalFile, original);
+  assert.deepEqual(libFiles(), [edited2, original].sort());
+  assert.equal(new Store(dir).getEvent(ev.id).items[0].originalFile, original);
+
+  const back = s.restoreItemOriginal(ev.id, id);
+  assert.deepEqual([back.file, back.originalFile, back.pageCount], [original, null, null]);
+  assert.deepEqual(libFiles(), [original]);
+  assert.throws(() => s.restoreItemOriginal(ev.id, id), /nothing to restore/);
+});
+
+test('page edits: a copy shared with a duplicated event is never lost, and bad input is refused', () => {
+  const s = new Store(dir);
+  const ev = s.createEvent('E');
+  const { added } = s.addPdfs(ev.id, [fakePdf('a.pdf')]);
+  const original = added[0].file;
+  const copy = s.duplicateEvent(ev.id);
+  const edited = s.newLibraryFile();
+  fs.copyFileSync(path.join(dir, 'library', original), path.join(dir, 'library', edited));
+  s.replaceItemFile(ev.id, added[0].id, edited, 3);
+  s.restoreItemOriginal(ev.id, added[0].id);
+  assert.equal(s.getEvent(copy.id).items[0].file, original); // the other event still plays its own copy
+  assert.deepEqual(libFiles(), [original]);
+
+  assert.throws(() => s.replaceItemFile(ev.id, added[0].id, 'not-there.pdf', 3), /not found in the library/);
+  assert.throws(() => s.replaceItemFile(ev.id, added[0].id, '../../etc/passwd', 3), /not found in the library/);
+  assert.throws(() => s.replaceItemFile(ev.id, 'nope', edited, 3), StoreError);
+  assert.throws(() => s.restoreItemOriginal(ev.id, 'nope'), StoreError);
+  assert.equal(s.getEvent(ev.id).items[0].file, original);
+});
+
 test('events saved by an older version load with empty presenter and title', () => {
   fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify({
     version: 1,

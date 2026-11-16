@@ -6,6 +6,9 @@ import {
   normalizeQuery, stepHit,
 } from '../lib/reader.js';
 import { describePages, playedPages } from '../lib/page-range.js';
+import {
+  describePlan, initialPlan, isChanged, keepOnly, movePage, planToPages, rotatePage, toggleRemoved,
+} from '../lib/page-edit.js';
 import { TextLayer, openPdfAt } from './pdf.js';
 
 // ---------- reader parameters ----------
@@ -25,6 +28,11 @@ const MAX_SLIDES = Number.parseInt(params.get('max'), 10) > 0 ? Number.parseInt(
 /** The deck's own page range in that event (first and last page to play), when it has one. */
 const pageParam = (name) => (Number.parseInt(params.get(name), 10) > 0 ? Number.parseInt(params.get(name), 10) : null);
 const RANGE = { firstPage: pageParam('first'), lastPage: pageParam('last') };
+/** Set when this deck was opened from an event's playlist: only then can its pages be edited. */
+const EVENT_ID = params.get('event');
+const ITEM_ID = params.get('item');
+const CAN_EDIT = Boolean(EVENT_ID && ITEM_ID && window.pk);
+const ALREADY_EDITED = params.get('edited') === '1';
 
 let doc = null;
 /** One entry per page: { el, size: {width, height} in points, drawnAt: zoom|null, task, textLayer } */
@@ -167,6 +175,9 @@ function refreshVisible() {
 
 function updateCurrentPage() {
   const scroller = $('pages');
+  // While the grid is showing, the page column is hidden and has no positions to measure:
+  // a late scroll event must not move the reading position to the last page.
+  if (document.body.dataset.view === 'grid' || scroller.clientHeight === 0) return;
   const line = scroller.scrollTop + scroller.clientHeight * 0.35;
   let found = 0;
   for (let i = 0; i < pages.length; i += 1) {
@@ -244,10 +255,18 @@ function buildThumbs() {
 // ---------- grid view ----------
 
 let gridBuilt = false;
+/** The page-edit plan while "Edit pages" is on (see src/lib/page-edit.js); null otherwise. */
+let plan = null;
+/** original page index -> Promise<canvas>, so a page is drawn once however often the tiles are rebuilt */
+const editThumbs = new Map();
 
 /** Switch between reading pages and the grid: every page at once, like a contact sheet. */
 function setView(view) {
   const grid = view === 'grid';
+  if (!grid && plan) {
+    if (isChanged(plan) && !window.confirm('Leave without saving your page edits?')) return;
+    stopEditing();
+  }
   document.body.dataset.view = grid ? 'grid' : 'pages';
   $('toggleGrid').setAttribute('aria-pressed', String(grid));
   $('gridView').hidden = !grid;
@@ -260,6 +279,8 @@ function setView(view) {
         goToPage(i);
       });
       gridBuilt = true;
+      $('gridActions').hidden = !CAN_EDIT;
+      $('restorePages').hidden = !ALREADY_EDITED;
       const played = playedRange();
       const n = pages.length;
       const total = `${n} page${n === 1 ? '' : 's'}`;
@@ -283,13 +304,148 @@ function setView(view) {
   }
 }
 
+// ---------- editing pages ----------
+
+function startEditing() {
+  plan = initialPlan(pages.length);
+  document.body.dataset.editing = '1';
+  $('gridActions').hidden = true;
+  $('editBar').hidden = false;
+  const played = playedRange();
+  $('editKeepPlayed').hidden = !(played && played.count > 0 && played.count < pages.length);
+  renderEdit();
+}
+
+/** Leave edit mode without saving and show the ordinary grid again. */
+function stopEditing() {
+  plan = null;
+  delete document.body.dataset.editing;
+  $('editBar').hidden = true;
+  gridBuilt = false;
+  if (document.body.dataset.view === 'grid') setView('grid');
+}
+
+function editThumb(src) {
+  if (!editThumbs.has(src)) editThumbs.set(src, thumbCanvas(src, GRID_WIDTH));
+  return editThumbs.get(src);
+}
+
+function renderEdit(message, isError = false) {
+  const kept = planToPages(plan).length;
+  const status = $('editStatus');
+  status.classList.toggle('error', isError || kept === 0);
+  status.textContent = message || (kept === 0 ? 'A deck must keep at least one page.' : describePlan(plan));
+  $('editSave').disabled = !isChanged(plan) || kept === 0;
+  $('editReset').disabled = !isChanged(plan);
+  document.body.dataset.editKept = String(kept);
+  $('gridTiles').replaceChildren(...plan.map((entry, pos) => {
+    const size = pages[entry.src].size;
+    const tile = document.createElement('div');
+    tile.className = `edit-tile${entry.removed ? ' removed' : ''}`;
+    tile.draggable = true;
+    tile.dataset.pos = String(pos);
+    tile.dataset.src = String(entry.src);
+    const box = document.createElement('div');
+    box.className = 'thumb-box';
+    const boxHeight = Math.round(GRID_WIDTH * size.height / size.width);
+    box.style.width = `${GRID_WIDTH}px`;
+    box.style.height = `${boxHeight}px`;
+    editThumb(entry.src).then((canvas) => {
+      if (!canvas || !tile.isConnected) return;
+      // A sideways page is shrunk to fit the same box.
+      const fit = entry.rotate % 180 ? Math.min(GRID_WIDTH / boxHeight, boxHeight / GRID_WIDTH) : 1;
+      canvas.style.transform = entry.rotate ? `rotate(${entry.rotate}deg) scale(${fit})` : '';
+      box.replaceChildren(canvas);
+    });
+    const label = document.createElement('span');
+    label.className = 'edit-label';
+    label.textContent = entry.removed ? `Page ${entry.src + 1} · removed` : `Page ${entry.src + 1}`;
+    const tools = document.createElement('div');
+    tools.className = 'edit-tools';
+    const button = (cls, text, title, act) => {
+      const b = document.createElement('button');
+      b.className = `tool ${cls}`;
+      b.textContent = text;
+      b.title = title;
+      b.setAttribute('aria-label', `${title} (page ${entry.src + 1})`);
+      b.addEventListener('click', () => {
+        plan = act();
+        renderEdit();
+      });
+      tools.append(b);
+      return b;
+    };
+    button('move-left', '←', 'Move earlier', () => movePage(plan, pos, pos - 1)).disabled = pos === 0;
+    button('move-right', '→', 'Move later', () => movePage(plan, pos, pos + 1)).disabled = pos === plan.length - 1;
+    button('rotate', '↻', 'Rotate a quarter turn', () => rotatePage(plan, pos));
+    button('remove', entry.removed ? 'Keep' : '✕', entry.removed ? 'Keep this page after all' : 'Remove this page', () => toggleRemoved(plan, pos));
+    tile.append(box, label, tools);
+
+    tile.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('application/x-pk-page', String(pos));
+      e.dataTransfer.effectAllowed = 'move';
+      tile.classList.add('dragging');
+    });
+    tile.addEventListener('dragend', () => tile.classList.remove('dragging'));
+    tile.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer.types.includes('application/x-pk-page')) return;
+      e.preventDefault();
+      tile.classList.add('drop-target');
+    });
+    tile.addEventListener('dragleave', () => tile.classList.remove('drop-target'));
+    tile.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const from = Number(e.dataTransfer.getData('application/x-pk-page'));
+      if (Number.isInteger(from) && from !== pos) plan = movePage(plan, from, pos);
+      renderEdit();
+    });
+    return tile;
+  }));
+}
+
+async function saveEdits() {
+  const list = planToPages(plan);
+  if (!list.length || !isChanged(plan)) return;
+  for (const id of ['editSave', 'editCancel', 'editReset', 'editKeepPlayed']) $(id).disabled = true;
+  $('editStatus').classList.remove('error');
+  $('editStatus').textContent = 'Saving…';
+  try {
+    await window.pk.applyPages(EVENT_ID, ITEM_ID, list);
+    // The main process now reloads this window on the new file.
+  } catch (err) {
+    debug('reader', 'saving page edits failed', err);
+    $('editCancel').disabled = false;
+    renderEdit(`Could not save: ${err.message}`, true);
+  }
+}
+
+async function restoreOriginal() {
+  if (!window.confirm('Restore this deck as it was added?\n\nEvery page you removed, moved or rotated comes back.')) return;
+  try {
+    await window.pk.restorePages(EVENT_ID, ITEM_ID); // the window reloads on the original file
+  } catch (err) {
+    debug('reader', 'restoring the original failed', err);
+    $('gridInfo').textContent = `Could not restore the original: ${err.message}`;
+  }
+}
+
 function markCurrentTiles() {
+  if (plan) { // in edit mode the grid's tiles are plan entries, not pages in order
+    for (const el of $('thumbs').children) el.classList.toggle('current', Number(el.dataset.page) === currentPage);
+    return;
+  }
   for (const container of [$('thumbs'), $('gridTiles')]) {
     for (const el of container.children) el.classList.toggle('current', Number(el.dataset.page) === currentPage);
   }
 }
 
 async function drawThumb(index, box, width) {
+  const canvas = await thumbCanvas(index, width);
+  if (canvas) box.replaceChildren(canvas);
+}
+
+/** A small picture of one page, or null if it could not be drawn. */
+async function thumbCanvas(index, width) {
   try {
     const page = await doc.getPage(index + 1);
     const density = window.devicePixelRatio || 1;
@@ -302,9 +458,10 @@ async function drawThumb(index, box, width) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
-    box.replaceChildren(canvas);
+    return canvas;
   } catch (err) {
     debug('reader', `could not draw thumbnail ${index + 1}`, err);
+    return null;
   }
 }
 
@@ -363,7 +520,7 @@ function renderFind() {
   $('findPrev').disabled = n === 0;
   $('findNext').disabled = n === 0;
   document.body.dataset.findCount = String(n);
-  for (const container of [$('thumbs'), $('gridTiles')]) {
+  for (const container of plan ? [$('thumbs')] : [$('thumbs'), $('gridTiles')]) {
     [...container.children].forEach((el, i) => {
       el.querySelector('.hits')?.remove();
       if (find.perPage[i]) {
@@ -398,7 +555,7 @@ async function runFind(raw) {
 
 function showCurrentHit() {
   const hit = find.hits[find.index];
-  if (!hit) return;
+  if (!hit || plan) return;
   if (document.body.dataset.view === 'grid') { // in the grid, a match is shown by moving to its page's tile
     currentPage = hit.page;
     renderPageControl();
@@ -447,6 +604,22 @@ function wire() {
   });
   $('pageInput').addEventListener('focus', (e) => e.target.select());
   $('toggleGrid').addEventListener('click', () => setView(document.body.dataset.view === 'grid' ? 'pages' : 'grid'));
+  $('editPages').addEventListener('click', startEditing);
+  $('restorePages').addEventListener('click', restoreOriginal);
+  $('editSave').addEventListener('click', saveEdits);
+  $('editCancel').addEventListener('click', () => {
+    if (isChanged(plan) && !window.confirm('Discard your page edits?')) return;
+    stopEditing();
+  });
+  $('editReset').addEventListener('click', () => {
+    plan = initialPlan(pages.length);
+    renderEdit();
+  });
+  $('editKeepPlayed').addEventListener('click', () => {
+    const played = playedRange();
+    plan = keepOnly(plan, played.first, played.last);
+    renderEdit();
+  });
   $('toggleThumbs').addEventListener('click', () => {
     const show = $('thumbs').hidden;
     $('thumbs').hidden = !show;
@@ -499,6 +672,13 @@ function wire() {
     const mod = e.metaKey || e.ctrlKey;
     const typing = e.target instanceof HTMLElement && e.target.matches('input, select');
     const grid = document.body.dataset.view === 'grid';
+    if (plan) { // editing pages: Esc cancels; the reading shortcuts are off so a stray key cannot leave the screen
+      if (e.key === 'Escape' && !typing) {
+        e.preventDefault();
+        $('editCancel').click();
+      }
+      return;
+    }
     if (!typing && !mod && (e.key === 'g' || e.key === 'G')) {
       e.preventDefault();
       setView(grid ? 'pages' : 'grid');
@@ -567,8 +747,9 @@ async function init() {
   renderFind();
   $('readerStatus').hidden = true;
   document.body.dataset.view = 'pages';
+  if (params.get('view') === 'grid') setView('grid'); // reopened after a page edit
   document.body.dataset.ready = '1';
-  container.focus();
+  if (document.body.dataset.view !== 'grid') container.focus();
 }
 
 window.addEventListener('beforeunload', () => doc?.destroy());

@@ -38,7 +38,23 @@
   </header>
 
   <div id="gridView" class="grid-view" tabindex="0" aria-label="All pages" hidden>
-    <div id="gridInfo" class="grid-info"></div>
+    <div class="grid-head">
+      <div id="gridInfo" class="grid-info"></div>
+      <div id="gridActions" class="grid-actions" hidden>
+        <button id="restorePages" class="tool" hidden title="Undo every page edit: go back to the PDF as it was added">Restore original pages</button>
+        <button id="editPages" class="tool" title="Remove, reorder or rotate this deck's pages">Edit pages…</button>
+      </div>
+    </div>
+    <div id="editBar" class="edit-bar" hidden>
+      <div class="edit-text">
+        <strong>Editing pages.</strong> Drag a page to move it, or use its buttons. Nothing changes until you save, and the original is kept.
+        <div id="editStatus" class="edit-status" aria-live="polite"></div>
+      </div>
+      <button id="editKeepPlayed" class="tool" hidden title="Remove every page this event does not play">Keep only the pages that play</button>
+      <button id="editReset" class="tool" title="Put every page back as it was">Undo all</button>
+      <button id="editCancel" class="tool">Cancel</button>
+      <button id="editSave" class="tool primary" disabled>Save changes</button>
+    </div>
     <div id="gridTiles" class="grid-tiles"></div>
   </div>
 
