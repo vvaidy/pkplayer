@@ -1004,6 +1004,37 @@ test('reader: edit pages (remove, rotate, reorder), save a new copy, restore the
   await app.close();
 });
 
+test('editor: the progress bar switch is per event, on by default, and persists', async () => {
+  const { app, editor } = await launch();
+  await editor.click('#newEvent');
+  await editor.fill('#eventName', 'Clean Screen');
+  await editor.press('#eventName', 'Enter');
+  await expect(editor.locator('#showProgress')).toBeChecked();
+  await editor.uncheck('#showProgress');
+  await editor.click('#newEvent');
+  await editor.fill('#eventName', 'With Bar');
+  await editor.press('#eventName', 'Enter');
+  await expect(editor.locator('#showProgress')).toBeChecked(); // a new event starts with the bar on
+  await editor.locator('.event-item', { hasText: 'Clean Screen' }).click();
+  await expect(editor.locator('#showProgress')).not.toBeChecked();
+  // The switch sits on the summary line and does not push Play off the first line.
+  const play = await editor.locator('#playBtn').boundingBox();
+  const format = await editor.locator('#preset').boundingBox();
+  const check = await editor.locator('#showProgress').boundingBox();
+  const summary = await editor.locator('#summary').boundingBox();
+  expect(Math.abs((play.y + play.height / 2) - (format.y + format.height / 2))).toBeLessThan(14);
+  expect(Math.abs((check.y + check.height / 2) - (summary.y + summary.height / 2))).toBeLessThan(10);
+  await editor.screenshot({ path: path.join(SHOTS, 'editor-progress-switch.png') });
+
+  await app.close();
+  const { app: app2, editor: editor2 } = await launch();
+  await editor2.locator('.event-item', { hasText: 'Clean Screen' }).click();
+  await expect(editor2.locator('#showProgress')).not.toBeChecked();
+  await editor2.locator('.event-item', { hasText: 'With Bar' }).click();
+  await expect(editor2.locator('#showProgress')).toBeChecked();
+  await app2.close();
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });
@@ -1485,6 +1516,38 @@ test('player: a deck with a page range starts and stops on the chosen PDF pages'
   await player.keyboard.press('ArrowLeft');
   await expect(player.locator('body')).toHaveAttribute('data-pdf-page', '1');
   const closed = player.waitForEvent('close');
+  await player.keyboard.press('Escape');
+  await closed;
+  await app.close();
+});
+
+test('player: an event can hide the progress bar and counter, and nothing else changes', async () => {
+  const { app, editor } = await launch();
+  await setupEvent(app, editor, { time: '2', max: '3', files: [fx('alpha-5-slides.pdf')] });
+  await editor.uncheck('#showProgress');
+  await expect(editor.locator('#showProgress')).not.toBeChecked();
+
+  let player = await openPlayer(app, editor);
+  await player.keyboard.press('Space');
+  await expect(player.locator('body')).toHaveAttribute('data-phase', 'playing');
+  await expect(player.locator('#progress')).toBeHidden();
+  await expect(player.locator('#counter')).toBeHidden();
+  // Timing still runs, and pausing still shows its badge.
+  await expect(player.locator('body')).toHaveAttribute('data-slide', '1', { timeout: 4000 });
+  await player.keyboard.press('Space');
+  await expect(player.locator('#pauseBadge')).toBeVisible();
+  await expect(player.locator('#progress')).toBeHidden();
+  let closed = player.waitForEvent('close');
+  await player.keyboard.press('Escape');
+  await closed;
+
+  // Switched back on, both return.
+  await editor.check('#showProgress');
+  player = await openPlayer(app, editor);
+  await player.keyboard.press('Space');
+  await expect(player.locator('#progress')).toBeVisible();
+  await expect(player.locator('#counter')).toBeVisible();
+  closed = player.waitForEvent('close');
   await player.keyboard.press('Escape');
   await closed;
   await app.close();

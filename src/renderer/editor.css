@@ -83,8 +83,12 @@
 }
 .prop { display: flex; flex-direction: column; gap: 6px; }
 .prop .select { height: 36px; } /* same height as the number fields beside it */
-/* The summary has its own line under the fields, so Play stays on the first line at any width. */
-.prop.summary { display: block; order: 9; flex-basis: 100%; color: var(--text-dim); font-size: 13px; }
+/* The second line of the settings bar: the summary on the left, the on-screen switch on the right.
+   .props-break forces the new line, so Play stays on the first line at any width. */
+.props-break { order: 8; flex-basis: 100%; height: 0; margin: -6px 0; }
+.prop.summary { display: block; order: 9; flex: 1 1 auto; min-width: 0; color: var(--text-dim); font-size: 13px; }
+.check { order: 10; flex: none; display: flex; align-items: center; gap: 7px; color: var(--text-dim); font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; cursor: pointer; }
 .summary strong { color: var(--text); }
 .summary .attention { color: var(--warn); font-weight: 600; }
 .play-group { margin-left: auto; display: flex; gap: 8px; align-items: center; }

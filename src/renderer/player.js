@@ -333,6 +333,8 @@ async function init() {
   setupResize();
 
   ev = await pk.getEvent(EVENT_ID);
+  // The event can ask for a clean screen: no progress bar and no slide counter.
+  if (ev.showProgress === false) document.body.classList.add('no-progress');
   if (ev.practice) {
     document.querySelector('.ended-title').textContent = 'End of practice';
     $('endedHint').textContent = 'Space to go again · Esc to return to the editor';

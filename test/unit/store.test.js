@@ -37,6 +37,36 @@ test('creates events with PechaKucha defaults and persists them', () => {
   assert.deepEqual(reloaded.listEvents(), [ev]);
 });
 
+test('showProgress: on by default, can be switched off per event, and validates', () => {
+  const s = new Store(dir);
+  const a = s.createEvent('A');
+  const b = s.createEvent('B');
+  assert.equal(a.showProgress, true);
+  assert.equal(s.updateEvent(a.id, { showProgress: false }).showProgress, false);
+  assert.equal(new Store(dir).getEvent(a.id).showProgress, false);
+  assert.equal(new Store(dir).getEvent(b.id).showProgress, true); // the other event is untouched
+  assert.equal(s.duplicateEvent(a.id).showProgress, false);
+  assert.equal(s.updateEvent(a.id, { name: 'Renamed' }).showProgress, false); // other edits leave it alone
+  for (const bad of ['no', 0, null, undefined, {}]) assert.throws(() => s.updateEvent(a.id, { showProgress: bad }), /must be on or off/, String(bad));
+  assert.equal(s.getEvent(a.id).showProgress, false);
+  assert.equal(s.updateEvent(a.id, { showProgress: true }).showProgress, true);
+});
+
+test('showProgress: events saved by older versions show the bar, and practice always does', () => {
+  fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify({
+    version: 1,
+    settings: { displayId: null },
+    events: [
+      { id: 'e1', name: 'Old', timePerSlide: 20, maxSlides: 20, items: [] },
+      { id: 'e2', name: 'Off', timePerSlide: 20, maxSlides: 20, showProgress: false, items: [] },
+      { id: 'e3', name: 'Odd', timePerSlide: 20, maxSlides: 20, showProgress: 'nope', items: [] },
+    ],
+  }), { encoding: 'utf-8' });
+  const s = new Store(dir);
+  assert.deepEqual(s.listEvents().map((e) => e.showProgress), [true, false, true]);
+  assert.equal(s.startPractice(fakePdf('a.pdf')).showProgress, true);
+});
+
 test('blank name gets a default', () => {
   const s = new Store(dir);
   assert.equal(s.createEvent('   ').name, 'Event 1');

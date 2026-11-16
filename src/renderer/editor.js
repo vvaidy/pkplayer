@@ -207,6 +207,7 @@ function renderSettings(ev, { keepFocused = false } = {}) {
     if (!keepFocused || document.activeElement !== $(key)) $(key).value = ev[key];
   }
   $('preset').value = presetIdFor(ev.timePerSlide, ev.maxSlides);
+  $('showProgress').checked = ev.showProgress !== false;
 }
 
 function itemStats(ev, it) {
@@ -1049,6 +1050,13 @@ function wireControls() {
   });
 
   wireThemeEditor();
+  $('showProgress').addEventListener('change', async (e) => {
+    const ev = selected();
+    if (!ev) return;
+    const updated = await guarded('Saving the progress bar setting', () => pk.updateEvent(ev.id, { showProgress: e.target.checked }));
+    if (updated) replaceEvent(updated);
+    renderSettings(selected()); // shows the saved value, also when the save was refused
+  });
   const themeEl = $('themeSelect');
   themeEl.addEventListener('change', async () => {
     const s = await guarded('Saving theme', () => pk.updateSettings({ theme: themeEl.value }));

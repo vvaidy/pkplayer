@@ -27,6 +27,8 @@ An **Event** has a name, two settings (with a Format shortcut for them), and a p
 
 Change a value and press Enter or click elsewhere. An out-of-range value shakes, shows an error and reverts.
 
+**Progress bar and counter**, the checkbox on the line below, decides whether the player shows its progress bar and slide counter for this event. It is on for a new event. Switch it off for a completely clean screen; timing is unaffected, and the pause badge still appears when you pause. Practice always shows both.
+
 **Format** sets both values in one step:
 
 | Format | Time per slide | Max slides |

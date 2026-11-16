@@ -65,7 +65,11 @@
             <label class="field-label" for="maxSlides">Max slides</label>
             <div class="input-unit"><input id="maxSlides" class="input num" type="number" min="1" max="999" step="1"><span>per PDF</span></div>
           </div>
+          <div class="props-break" aria-hidden="true"></div>
           <div class="prop summary" id="summary"></div>
+          <label class="check" title="Show the progress bar and the slide counter while a deck plays. Switch off for a completely clean screen.">
+            <input id="showProgress" type="checkbox"> Progress bar and counter
+          </label>
           <div class="play-group">
             <button id="playFromStart" class="btn btn-ghost" hidden>From start</button>
             <button id="playBtn" class="btn btn-play" title="Play (F)"><span class="tri"></span><span id="playLabel">Play</span></button>

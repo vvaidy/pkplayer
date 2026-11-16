@@ -19,6 +19,8 @@ The slide fills the screen, letterboxed in black if its shape doesn't match the 
 - **Progress bar** — a thin bar along the bottom edge that fills over the slide's time and resets each slide. It is a light fill on a dark track, so it shows on any slide, white ones included. It turns amber while paused.
 - **Counter** — a small `3 / 20` chip in the bottom-right corner: slide number of slides that will play in this deck.
 
+Both can be switched off for an event with the **Progress bar and counter** checkbox in the [editor's settings](03-editor.md#settings).
+
 After the deck's last playable slide (Max slides, or the last page if fewer), the next deck appears on its Play button.
 
 ### Paused

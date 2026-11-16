@@ -109,6 +109,7 @@ export class Store {
         name: cleanName(e.name, 'Untitled Event'),
         timePerSlide: Number(e.timePerSlide) > 0 ? Number(e.timePerSlide) : DEFAULT_TIME_PER_SLIDE,
         maxSlides: Number.isInteger(e.maxSlides) && e.maxSlides >= 1 ? e.maxSlides : DEFAULT_MAX_SLIDES,
+        showProgress: e.showProgress !== false, // on unless switched off; absent in files written before 1.4
         items: (Array.isArray(e.items) ? e.items : [])
           .filter((it) => it && it.file)
           .map((it) => ({
@@ -183,6 +184,7 @@ export class Store {
       name: cleanName(name, `Event ${this.data.events.length + 1}`),
       timePerSlide: DEFAULT_TIME_PER_SLIDE,
       maxSlides: DEFAULT_MAX_SLIDES,
+      showProgress: true,
       items: [],
       createdAt: new Date().toISOString(),
     };
@@ -198,6 +200,10 @@ export class Store {
     if ('timePerSlide' in patch) ev.timePerSlide = clampNumber(patch.timePerSlide, LIMITS.timePerSlide, 'Time per slide');
     if ('maxSlides' in patch) {
       ev.maxSlides = clampNumber(patch.maxSlides, LIMITS.maxSlides, 'Max slides', { integer: true });
+    }
+    if ('showProgress' in patch) {
+      if (typeof patch.showProgress !== 'boolean') throw new StoreError('The progress bar setting must be on or off');
+      ev.showProgress = patch.showProgress;
     }
     this.#save();
     return this.#clone(ev);
@@ -445,6 +451,7 @@ export class Store {
     this.practice = {
       id: PRACTICE_EVENT_ID,
       practice: true,
+      showProgress: true, // someone rehearsing wants to see the time
       name: `Practice: ${name}`,
       timePerSlide: inRange(timePerSlide, LIMITS.timePerSlide) ? Number(timePerSlide) : DEFAULT_TIME_PER_SLIDE,
       maxSlides: inRange(maxSlides, LIMITS.maxSlides) && Number.isInteger(Number(maxSlides)) ? Number(maxSlides) : DEFAULT_MAX_SLIDES,

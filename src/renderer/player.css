@@ -19,6 +19,9 @@ body.player.idle { cursor: none; }
 }
 .paused .progress-fill { background: rgba(255, 196, 64, 0.95); }
 
+/* An event can switch both off for a completely clean screen. */
+.no-progress .progress, .no-progress .counter { display: none !important; }
+
 /* Slide counter: light text on its own dark chip, for the same reason. */
 .counter {
   position: fixed; right: 12px; bottom: 14px; z-index: 10; padding: 4px 7px; border-radius: 6px;
