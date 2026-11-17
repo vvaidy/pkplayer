@@ -674,6 +674,25 @@ async function exportEventPdf() {
   }
 }
 
+// ---------- update notice ----------
+
+const UPDATE_BUTTONS = { page: 'Download', update: 'Update now', install: 'Restart to finish', busy: 'Downloading…' };
+
+/**
+ * Show the update bar. `mode` decides what its main button does:
+ * "page" opens the download page, "update" downloads in the app, "install" restarts to
+ * finish, and "busy" means a download is running (the button waits).
+ */
+function showUpdateBanner(text, mode, percent) {
+  $('updateText').textContent = text;
+  $('updateBanner').dataset.mode = mode;
+  $('updateDownload').textContent = UPDATE_BUTTONS[mode];
+  $('updateDownload').disabled = mode === 'busy';
+  $('updateBar').hidden = percent === undefined;
+  if (percent !== undefined) $('updateBarFill').style.width = `${percent}%`;
+  $('updateBanner').hidden = false;
+}
+
 // ---------- speedrun test ----------
 
 /**
@@ -1085,15 +1104,29 @@ function wireControls() {
   // Update notice. A newer version shows a banner; a check the user asked for also reports the other outcomes.
   pk.onUpdateStatus((status) => {
     if (status.kind === 'newer') {
-      $('updateText').textContent = `PK Player ${status.latest} is available. You have ${status.current}.`;
-      $('updateBanner').hidden = false;
+      // Where this copy can update itself the button does that; elsewhere it opens the download page.
+      showUpdateBanner(`PK Player ${status.latest} is available. You have ${status.current}.`,
+        status.canSelfUpdate ? 'update' : 'page');
     } else if (status.manual && status.kind === 'current') {
       toast(`You have the latest version (${status.current}).`, 'ok');
     } else if (status.manual) {
       toast(`Could not check for updates: ${status.message}`, 'error', 6000);
     }
   });
-  $('updateDownload').addEventListener('click', () => guarded('Opening the download page', () => pk.openDownloadPage()));
+  // In-app update, step by step. Each step waits for the user's click.
+  pk.onUpdateProgress((p) => {
+    const name = p.version ? `PK Player ${p.version}` : 'the update';
+    if (p.state === 'checking') showUpdateBanner('Getting the update ready…', 'busy');
+    else if (p.state === 'downloading') showUpdateBanner(`Downloading ${name}… ${p.percent ?? 0}%`, 'busy', p.percent ?? 0);
+    else if (p.state === 'ready') showUpdateBanner(`${name} is downloaded. Restart PK Player to finish updating.`, 'install');
+    else if (p.state === 'error') showUpdateBanner(p.message, 'page');
+  });
+  $('updateDownload').addEventListener('click', () => {
+    const mode = $('updateBanner').dataset.mode;
+    if (mode === 'update') guarded('Starting the update', () => pk.startUpdate());
+    else if (mode === 'install') guarded('Restarting to update', () => pk.installUpdate());
+    else guarded('Opening the download page', () => pk.openDownloadPage());
+  });
   $('updateLater').addEventListener('click', () => { $('updateBanner').hidden = true; });
   // A deck's pages were edited (or restored) in a reader window: show its new page count and picture.
   pk.onItemsChanged(async ({ eventId }) => {

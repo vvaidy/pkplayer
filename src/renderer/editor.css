@@ -229,5 +229,8 @@
   animation: rise-in 0.2s ease-out;
 }
 .update-banner[hidden] { display: none; }
-.update-banner .spacer { flex: 1; }
+.update-main { flex: 1 1 auto; min-width: 0; }
+.update-bar { height: 4px; margin-top: 8px; border-radius: 2px; background: var(--bg-elev-2); overflow: hidden; }
+.update-bar[hidden] { display: none; }
+.update-bar-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
 

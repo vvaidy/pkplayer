@@ -56,7 +56,7 @@ Then, when you need them:
 - Rows show page count, that deck's run time, and warnings: more pages than Max Slides, fewer pages (PechaKucha and Ignite formats only), or a page shape that differs from most other decks. The summary counts the decks that need a look.
 - **Present on** chooses which display goes fullscreen.
 - **Progress bar and counter**, a checkbox in the settings bar, hides both in the player for that event.
-- **Updates:** PK Player tells you when a newer version exists (Help → Check for Updates…). It never installs anything itself, and the daily check can be switched off in the Help menu.
+- **Updates:** PK Player tells you when a newer version exists (Help → Check for Updates…). On Apple-silicon Macs the bar offers **Update now**, then **Restart to finish**; elsewhere it opens the download page. Nothing is downloaded or installed without a click, and the daily check can be switched off in the Help menu.
 - **Theme** picks from 11 color themes, dark and light, all made for PK Player. It colors the editor and the player's own controls, never your slides. "Vibe with Claude" is the original look. **Customize…** makes your own theme from six colors with a live preview; **Import…** reads a PK Player, Ghostty or iTerm2 theme file.
 - Play options: **Play** (or **F**), ▶ on a row to start from that PDF, or Enter on a focused row.
 - **Page range:** each row's **pages** boxes choose the first and last PDF page that deck plays, to skip a title or closing page without touching the file.

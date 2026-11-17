@@ -13,6 +13,8 @@ import { playedPages } from './src/lib/page-range.js';
 import { mergePdfs, rewritePdf } from './src/main/pdf-edit.js';
 import { DOWNLOAD_URL, checkIsDue } from './src/lib/update-check.js';
 import { checkForUpdate } from './src/main/update-check.js';
+import electronUpdater from 'electron-updater';
+import { SelfUpdater, createSimulatedUpdater, selfUpdateSupport } from './src/main/self-update.js';
 import { debug } from './src/lib/debug.js';
 
 // ---------- app parameters ----------
@@ -27,6 +29,8 @@ const UPDATE_FEED_FILE = process.env.PKPLAY_UPDATE_FEED || null;
 /** With an isolated data folder (tests, experiments) the app does not phone GitHub on its own. */
 const AUTO_UPDATE_CHECK_ALLOWED = !process.env.PKPLAY_DATA_DIR || Boolean(UPDATE_FEED_FILE);
 const UPDATE_CHECK_DELAY_MS = 4000; // let the window settle first
+/** Tests set this to "ok" or "fail" to walk through an in-app update with nothing downloaded or installed. */
+const UPDATE_SIMULATE = process.env.PKPLAY_UPDATE_SIMULATE || null;
 const THEME_FILE_MAX_BYTES = 512 * 1024; // theme files are a few KB; refuse anything that is clearly not one
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -309,6 +313,51 @@ function closePlayer() {
 
 // ---------- update notice ----------
 
+let latestKnownVersion = null;
+let selfUpdater = null;
+
+/** True when this copy of the app can download and install an update itself (see selfUpdateSupport). */
+function canSelfUpdate() {
+  if (UPDATE_SIMULATE) return true;
+  try {
+    return selfUpdateSupport({
+      platform: process.platform,
+      arch: process.arch,
+      isPackaged: app.isPackaged,
+      inApplicationsFolder: process.platform === 'darwin' && app.isInApplicationsFolder(),
+    }).supported;
+  } catch (err) {
+    debug('self-update', 'could not tell whether in-app update is possible', err);
+    return false;
+  }
+}
+
+/** The in-app updater, created the first time the user asks for an update and not before. */
+function getSelfUpdater() {
+  if (selfUpdater) return selfUpdater;
+  let updater;
+  if (UPDATE_SIMULATE) {
+    updater = createSimulatedUpdater(latestKnownVersion || '99.0.0', { fail: UPDATE_SIMULATE === 'fail' });
+    updater.quitAndInstall = () => { globalThis.pkSimulatedInstalled = true; };
+  } else {
+    updater = electronUpdater.autoUpdater;
+    updater.logger = {
+      info: (m) => debug('self-update', String(m)),
+      warn: (m) => debug('self-update', `warning: ${m}`),
+      error: (m) => debug('self-update', 'updater reported an error', m instanceof Error ? m : new Error(String(m))),
+      debug: () => {},
+    };
+  }
+  selfUpdater = new SelfUpdater({
+    updater,
+    currentVersion: app.getVersion(),
+    send: (status) => editorWin?.webContents.send('update:progress', status),
+    // Restarting would end a presentation that is on screen, so it waits.
+    blockInstall: () => (playerWin ? 'Stop the presentation first, then restart to finish updating.' : null),
+  });
+  return selfUpdater;
+}
+
 /**
  * Ask whether a newer version exists and tell the editor. It only ever tells: nothing is
  * downloaded or installed. `manual` is true when the user chose "Check for Updates…",
@@ -316,13 +365,14 @@ function closePlayer() {
  */
 async function runUpdateCheck({ manual }) {
   const result = await checkForUpdate({ currentVersion: app.getVersion(), feedFile: UPDATE_FEED_FILE });
+  if (result.kind === 'newer') latestKnownVersion = result.latest;
   try {
     if (result.kind !== 'error') store.updateSettings({ lastUpdateCheck: new Date().toISOString() });
   } catch (err) {
     debug('update', 'could not record the update check', err);
   }
   debug('update', `check (${manual ? 'manual' : 'automatic'}): ${result.kind}${result.latest ? ` ${result.latest}` : ''}`);
-  if (manual || result.kind === 'newer') editorWin?.webContents.send('update:status', { ...result, manual });
+  if (manual || result.kind === 'newer') editorWin?.webContents.send('update:status', { ...result, manual, canSelfUpdate: canSelfUpdate() });
   return result;
 }
 
@@ -406,6 +456,18 @@ function registerIpc() {
     return settings;
   });
   handle('update:openDownload', () => openHelpLink(DOWNLOAD_URL, (url) => shell.openExternal(url)));
+  // "Update now": download the newer version. It reports its progress through 'update:progress'.
+  handle('update:start', () => {
+    if (!canSelfUpdate()) throw new Error('This copy of PK Player cannot update itself. Use the download page.');
+    getSelfUpdater().start().catch((err) => debug('self-update', 'update failed', err));
+    return true;
+  });
+  // "Restart to finish": quit, install and reopen. Refused with a reason when it must wait.
+  handle('update:install', () => {
+    const res = getSelfUpdater().install();
+    if (!res.ok) throw new Error(res.message);
+    return true;
+  });
   handle('themes:list', () => store.listThemes());
   handle('themes:save', (theme) => {
     const saved = store.saveTheme(theme);

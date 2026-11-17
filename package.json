@@ -12,13 +12,14 @@
     "test": "node --test \"test/unit/*.test.js\"",
     "test:e2e": "playwright test",
     "fixtures": "node scripts/make-fixtures.js",
-    "dist": "electron-builder --mac",
-    "dist:mac:signed": "APPLE_KEYCHAIN_PROFILE=pkplayer-notary electron-builder --mac",
-    "dist:dir": "electron-builder --mac dir",
-    "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux"
+    "dist": "electron-builder --mac --publish never",
+    "dist:mac:signed": "APPLE_KEYCHAIN_PROFILE=pkplayer-notary electron-builder --mac --publish never",
+    "dist:dir": "electron-builder --mac dir --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
   },
   "dependencies": {
+    "electron-updater": "^6.8.11",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38"
   },
@@ -37,6 +38,13 @@
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "vvaidy",
+        "repo": "pkplayer"
+      }
+    ],
     "files": [
       "main.js",
       "preload.cjs",

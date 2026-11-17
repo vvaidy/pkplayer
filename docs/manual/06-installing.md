@@ -53,13 +53,16 @@ If macOS instead says it *could not verify* PK Player, or that it *is damaged an
 
 ## Updates
 
-PK Player tells you when a newer version exists. It never downloads or installs anything by itself.
+PK Player tells you when a newer version exists. It never downloads or installs anything by itself: an update only happens when you click for it.
 
 - **How it finds out:** a few seconds after it starts, at most once a day, PK Player asks GitHub which version is the latest. That is a single request for a public page. It carries no information about you, your events or your files; it identifies itself only as "PK-Player" and its version number. As with visiting any website, GitHub sees the internet address the request came from.
-- **What you see:** if a newer version exists, a bar at the top of the window says so, with **Download** (opens the release page in your browser) and **Later** (hides the bar until the next check). Nothing interrupts an event: the bar is only ever in the editor window.
+- **What you see:** if a newer version exists, a bar at the top of the window says so, with **Later** (hides the bar until the next check) and one of two buttons, depending on your computer. Nothing interrupts an event: the bar is only ever in the editor window.
+- **Update now** (Apple-silicon Macs, with PK Player in an Applications folder): PK Player downloads the new version itself and shows the progress. When that is done the button becomes **Restart to finish**. Until you click that second button nothing on your computer has changed; when you do, PK Player closes, replaces itself and reopens. It refuses to restart while a presentation is on screen. The update is only installed if it is signed by the same developer as the copy you are running.
+- **Download** (Windows, Linux, Intel Macs, or a Mac copy running from the disk image): opens the release page in your browser, and you install it as you did the first time.
+- If Update now fails for any reason, the bar says why in a sentence and the button turns into **Download**.
 - **To check yourself:** **Help → Check for Updates…**. This also tells you when you already have the latest version, or when GitHub could not be reached.
 - **To switch it off:** untick **Help → Check for Updates Automatically**. PK Player then contacts nobody unless you choose Check for Updates….
-- **To update:** download the new installer and install it over the old one, exactly as the first time. Your events, PDFs and themes are kept.
+- **Either way,** your events, PDFs and themes are kept.
 
 ## Where your data lives
 

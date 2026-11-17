@@ -19,6 +19,7 @@ Useful environment variables:
 | --- | --- |
 | `PKPLAY_DEBUG=1` | Verbose logging in the terminal and DevTools console. |
 | `PKPLAY_UPDATE_FEED=/path/to/file.json` | Read the "latest release" answer from a local file instead of GitHub. Used by the tests. |
+| `PKPLAY_UPDATE_SIMULATE=ok` or `fail` | Walk through an in-app update with a stand-in that downloads and installs nothing. Used by the tests. |
 | `PKPLAY_DATA_DIR=/some/dir` | Use a separate data folder (also allows a second instance alongside your normal one). |
 
 ## Tests
@@ -134,6 +135,7 @@ The Windows build is unsigned, so SmartScreen warns on first launch. Signing it 
 | `src/main/pdf-edit.js` | Writes PDFs with pdf-lib: an edited copy of a deck, or a whole event as one file. Always a new file. |
 | `src/lib/page-range.js` | Which pages of a deck play: its first and last page, capped by Max slides. |
 | `src/lib/update-check.js`, `src/main/update-check.js` | The update notice: compare versions, ask GitHub, report. Never downloads anything. |
+| `src/main/self-update.js` | In-app update on the Mac: "Update now" then "Restart to finish", using electron-updater. |
 | `src/lib/reader.js` | Reader view: zoom levels and text search. The window is `src/renderer/reader.{html,css,js}`. |
 | `src/lib/speedrun.js` | Speedrun test: the allowed speeds, timing and the end report. |
 | `src/lib/deck-label.js` | What the Play screen says about a deck; default presenter and title from PDF properties. |
@@ -144,3 +146,23 @@ The Windows build is unsigned, so SmartScreen warns on first launch. Signing it 
 | `scripts/make-demo-decks.js` | The demo decks in `samples/demo/`. |
 | `scripts/capture-docs-screens.js` | Regenerates the screenshots in `docs/manual/img/` (opens fullscreen windows). |
 | `build/icon.svg`, `build/icon.png` | App icon source and the 1024 px PNG electron-builder converts per platform. |
+
+## In-app update ("Update now")
+
+On Apple-silicon Macs the update bar can download and install a release itself. It depends on two files that the Mac build produces and CI attaches to every release:
+
+| File | What it is |
+| --- | --- |
+| `latest-mac.yml` | The index the app reads: the version, the zip's name and its checksum. |
+| `PK-Player-<version>-mac-arm64.zip` | The app itself. The updater installs from the zip, not the `.dmg`. |
+
+Things to keep true:
+
+- **A release without `latest-mac.yml` cannot be installed with Update now.** CI fails the Mac job if the file is missing or names the wrong version.
+- The address the app checks is fixed at build time by `build.publish` in `package.json` (this GitHub repository). Builds never upload anything: every script passes `--publish never`.
+- Only a **published** release is found. A draft is invisible to the updater, so verifying a draft before publishing still works.
+- The update is installed only if its code signature matches the running app, so a release must be signed with the same Developer ID as the one before it.
+- Intel Macs, Windows and Linux are deliberately left on the Download button: those builds are untested, and the Windows build is unsigned.
+
+**Testing a real update without a release.** Build two throwaway copies under a different app id that point at a local web server, install the older one in `~/Applications`, serve the newer one's `latest-mac.yml` and zip, and click through. If you do this, also give the throwaway builds a different `productName` in `extraMetadata`: the folder an app keeps its data in follows `productName` in `package.json`, not the builder's own setting, so without that a test copy opens the real app's events.
+

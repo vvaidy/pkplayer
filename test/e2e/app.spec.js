@@ -1142,6 +1142,78 @@ test('editor: update notice shows a newer version, checks on request, and can be
   }
 });
 
+test('editor: Update now downloads on the first click and installs only on the second', async () => {
+  // A stand-in updater walks through the steps; nothing is downloaded or installed.
+  const feed = path.join(os.tmpdir(), `pk-feed-${process.pid}-${Date.now()}.json`);
+  fs.writeFileSync(feed, JSON.stringify({ tag_name: 'v99.0.0' }), 'utf-8');
+  try {
+    let { app, editor } = await launch({ PKPLAY_UPDATE_FEED: feed, PKPLAY_UPDATE_SIMULATE: 'ok' });
+    await expect(editor.locator('#updateBanner')).toBeVisible({ timeout: 12000 });
+    await expect(editor.locator('#updateDownload')).toHaveText('Update now');
+    await expect(editor.locator('#updateBar')).toBeHidden();
+    // Nothing has started: showing the notice downloads nothing.
+    expect(await app.evaluate(() => globalThis.pkSimulatedInstalled ?? false)).toBe(false);
+
+    await editor.click('#updateDownload');
+    await expect(editor.locator('#updateText')).toContainText('Downloading PK Player 99.0.0');
+    await expect(editor.locator('#updateDownload')).toBeDisabled();
+    await expect(editor.locator('#updateBar')).toBeVisible();
+    // It stops when the download is done. Installing is a separate click.
+    await expect(editor.locator('#updateText')).toHaveText('PK Player 99.0.0 is downloaded. Restart PK Player to finish updating.');
+    await expect(editor.locator('#updateDownload')).toHaveText('Restart to finish');
+    await expect(editor.locator('#updateDownload')).toBeEnabled();
+    await expect(editor.locator('#updateBar')).toBeHidden();
+    await editor.waitForTimeout(800);
+    expect(await app.evaluate(() => globalThis.pkSimulatedInstalled ?? false)).toBe(false);
+    await editor.screenshot({ path: path.join(SHOTS, 'update-ready.png') });
+    // "Later" leaves the downloaded update alone; nothing installs when the bar is dismissed.
+    await editor.click('#updateLater');
+    await expect(editor.locator('#updateBanner')).toBeHidden();
+    expect(await app.evaluate(() => globalThis.pkSimulatedInstalled ?? false)).toBe(false);
+    // Asking again brings the bar back at the same step, and the second click installs.
+    await app.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === 'Check for Updates…').click();
+    });
+    await expect(editor.locator('#updateDownload')).toHaveText('Update now');
+    await editor.click('#updateDownload');
+    await expect(editor.locator('#updateDownload')).toHaveText('Restart to finish');
+    await editor.click('#updateDownload');
+    await expect.poll(() => app.evaluate(() => globalThis.pkSimulatedInstalled ?? false)).toBe(true);
+    await app.close();
+
+    // A download that fails says so in plain words and falls back to the download page.
+    ({ app, editor } = await launch({ PKPLAY_UPDATE_FEED: feed, PKPLAY_UPDATE_SIMULATE: 'fail' }));
+    await app.evaluate(({ shell }) => {
+      globalThis.pkOpened = [];
+      shell.openExternal = async (url) => { globalThis.pkOpened.push(url); };
+    });
+    await app.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === 'Check for Updates…').click();
+    });
+    await editor.click('#updateDownload');
+    await expect(editor.locator('#updateText')).toContainText('could not be downloaded');
+    await expect(editor.locator('#updateDownload')).toHaveText('Download');
+    await editor.click('#updateDownload');
+    await expect.poll(() => app.evaluate(() => globalThis.pkOpened)).toEqual(['https://github.com/vvaidy/pkplayer/releases/latest']);
+    expect(await app.evaluate(() => globalThis.pkSimulatedInstalled ?? false)).toBe(false);
+    await app.close();
+
+    // Run from source (not an installed app), the button stays "Download": this copy cannot replace itself.
+    ({ app, editor } = await launch({ PKPLAY_UPDATE_FEED: feed }));
+    await app.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu().items.flatMap((i) => (i.submenu ? i.submenu.items : [])).find((x) => x.label === 'Check for Updates…').click();
+    });
+    await expect(editor.locator('#updateBanner')).toBeVisible();
+    if (!process.env.PK_E2E_EXECUTABLE) {
+      await expect(editor.locator('#updateDownload')).toHaveText('Download');
+      expect(await editor.evaluate(() => window.pk.startUpdate().then(() => 'started', (e) => e.message))).toContain('cannot update itself');
+    }
+    await app.close();
+  } finally {
+    fs.rmSync(feed, { force: true });
+  }
+});
+
 test('player: waits for Play, times slides exactly, caps at max slides, stops at each deck', async () => {
   const { app, editor } = await launch();
   await setupEvent(app, editor, { files: [fx('bravo-25-slides.pdf'), fx('charlie-3-slides.pdf')] });

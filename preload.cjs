@@ -55,6 +55,9 @@ contextBridge.exposeInMainWorld('pk', {
   onItemsChanged: (fn) => on('items:changed', fn),
   onUpdateStatus: (fn) => on('update:status', fn),
   openDownloadPage: () => call('update:openDownload'),
+  startUpdate: () => call('update:start'),
+  installUpdate: () => call('update:install'),
+  onUpdateProgress: (fn) => on('update:progress', fn),
   onDisplaysChanged: (fn) => on('displays:changed', fn),
   onMenu: (name, fn) => on(`menu:${name}`, fn),
 });
