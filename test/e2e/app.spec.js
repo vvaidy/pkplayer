@@ -22,8 +22,21 @@ test.beforeEach(() => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pk-e2e-'));
 });
 
-test.afterEach(() => {
+/** Everything the app printed during the current test (it logs every error it handles). */
+let appLog = [];
+const APP_LOGS = path.join(ROOT, 'test-results', 'app-logs');
+
+test.afterEach(({}, testInfo) => {
   fs.rmSync(dataDir, { recursive: true, force: true });
+  // Keep the app's own log of each test, so an error on screen can be traced to the test that caused it.
+  try {
+    fs.mkdirSync(APP_LOGS, { recursive: true });
+    const name = testInfo.title.replace(/[^a-z0-9]+/gi, '-').slice(0, 80);
+    fs.writeFileSync(path.join(APP_LOGS, `${name}.log`), appLog.join(''), 'utf-8');
+  } catch (err) {
+    console.error('could not save the app log', err);
+  }
+  appLog = [];
 });
 
 async function launch(extraEnv = {}) {
@@ -33,6 +46,17 @@ async function launch(extraEnv = {}) {
     ...(exe ? { executablePath: path.resolve(ROOT, exe), args: [] } : { args: [ROOT] }),
     env: { ...process.env, PKPLAY_DATA_DIR: dataDir, PKPLAY_DEBUG: '1', ...extraEnv },
   });
+  app.process().stderr.on('data', (d) => appLog.push(d.toString()));
+  app.process().stdout.on('data', (d) => appLog.push(d.toString()));
+  // Errors inside the windows (editor, player, reader) are logged there, not by the main process.
+  const watch = (page) => {
+    page.on('console', (m) => {
+      if (m.type() === 'error' || m.type() === 'warning') appLog.push(`[window ${m.type()}] ${m.text()}\n`);
+    });
+    page.on('pageerror', (err) => appLog.push(`[window uncaught] ${err.message}\n`));
+  };
+  app.on('window', watch);
+  app.windows().forEach(watch);
   const editor = await app.firstWindow();
   await editor.waitForSelector('body[data-ready="1"]');
   return { app, editor };
@@ -1460,6 +1484,8 @@ test('speedrun: an unreadable deck and skipping ahead are reported, not passed',
   await expect(player.locator('.ended-title')).toHaveText('Speedrun finished with problems');
   await expect(player.locator('#speedReportSummary')).toContainText('1 of 2 decks opened');
   await expect(player.locator('#speedReportLines li').first()).toContainText('“charlie-3-slides.pdf” could not be opened');
+  await player.waitForTimeout(400);
+  await player.screenshot({ path: path.join(SHOTS, 'speedrun-problems.png') }); // the deliberate failure, as it looks on screen
   const closed = player.waitForEvent('close');
   await player.keyboard.press('Escape');
   await closed;

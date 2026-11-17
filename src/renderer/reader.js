@@ -460,7 +460,8 @@ async function thumbCanvas(index, width) {
     await page.render({ canvasContext: ctx, viewport }).promise;
     return canvas;
   } catch (err) {
-    debug('reader', `could not draw thumbnail ${index + 1}`, err);
+    // A drawing that is cancelled because the window is closing is not an error worth logging.
+    if (err?.name !== 'RenderingCancelledException') debug('reader', `could not draw thumbnail ${index + 1}`, err);
     return null;
   }
 }
